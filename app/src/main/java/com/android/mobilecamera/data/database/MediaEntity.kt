@@ -1,4 +1,14 @@
 package com.android.mobilecamera.data.database
 
-class MediaEntity {
-}
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "media_table")
+data class MediaEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+
+    val path: String,
+    val type: MediaType,
+    val timestamp: Long
+)
