@@ -1,4 +1,6 @@
 package com.android.mobilecamera.navigation
 
-class Screens {
+sealed class Screen(val route: String) {
+    data object Camera : Screen("camera")
+    data object Gallery : Screen("gallery")
 }

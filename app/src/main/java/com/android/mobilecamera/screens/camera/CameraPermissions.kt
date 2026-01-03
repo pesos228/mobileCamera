@@ -1,4 +1,4 @@
-package com.android.mobilecamera.fragments.camera
+package com.android.mobilecamera.screens.camera
 
 import android.Manifest
 import android.content.Context

@@ -1,4 +1,4 @@
-package com.android.mobilecamera.fragments.gallery
+package com.android.mobilecamera.screens.gallery
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
