@@ -1,4 +1,4 @@
-package com.android.mobilecamera.screens.gallery
+package com.android.mobilecamera.feature.gallery
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -11,6 +11,7 @@ import com.android.mobilecamera.data.repository.MediaRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -24,9 +25,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             for (i in 1..12) {
                 val isVideo = i % 3 == 0
+                val duration = if (isVideo) Random.nextLong(5000, 120000) else null
                 repository.saveMedia(
                     path = "mock_$i",
-                    type = if (isVideo) MediaType.VIDEO else MediaType.PHOTO
+                    type = if (isVideo) MediaType.VIDEO else MediaType.PHOTO,
+                    duration = duration
                 )
             }
         }

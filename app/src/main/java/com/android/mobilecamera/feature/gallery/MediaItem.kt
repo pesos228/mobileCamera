@@ -1,4 +1,4 @@
-package com.android.mobilecamera.screens.gallery
+package com.android.mobilecamera.feature.gallery
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -59,6 +62,29 @@ fun MediaItem(item: MediaEntity) {
                     .padding(4.dp)
                     .size(24.dp)
             )
+
+            item.duration?.let { durationMillis ->
+                Text(
+                    text = formatDuration(durationMillis),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
         }
     }
+}
+
+fun formatDuration(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%02d:%02d".format(minutes, seconds)
 }

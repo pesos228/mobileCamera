@@ -1,4 +1,4 @@
-package com.android.mobilecamera.feature.gallery
+package com.android.mobilecamera.feature.gallery.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.android.mobilecamera.data.database.MediaEntity
+import com.android.mobilecamera.feature.gallery.MediaItem
 
 @Composable
 fun GalleryContent(

@@ -4,8 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.android.mobilecamera.screens.camera.CameraRoute
-import com.android.mobilecamera.screens.gallery.GalleryRoute
+import com.android.mobilecamera.feature.camera.CameraRoute
+import com.android.mobilecamera.feature.gallery.GalleryRoute
 
 
 @Composable

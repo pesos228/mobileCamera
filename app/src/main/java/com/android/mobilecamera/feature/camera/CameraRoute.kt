@@ -1,4 +1,4 @@
-package com.android.mobilecamera.screens.camera
+package com.android.mobilecamera.feature.camera
 
 import android.app.Activity
 import android.widget.Toast
@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
+import com.android.mobilecamera.feature.camera.ui.CameraScreenContent
 
 @Composable
 fun CameraRoute(

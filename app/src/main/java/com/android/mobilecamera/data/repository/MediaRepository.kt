@@ -9,11 +9,12 @@ class MediaRepository(private val mediaDao: MediaDao) {
 
     val allMedia: Flow<List<MediaEntity>> = mediaDao.getAllMedia()
 
-    suspend fun saveMedia(path: String, type: MediaType) {
+    suspend fun saveMedia(path: String, type: MediaType, duration: Long? = null) {
         val entity = MediaEntity(
             path = path,
             type = type,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            duration = duration
         )
         mediaDao.insert(entity)
     }

@@ -1,4 +1,4 @@
-package com.android.mobilecamera.feature.camera
+package com.android.mobilecamera.feature.camera.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
