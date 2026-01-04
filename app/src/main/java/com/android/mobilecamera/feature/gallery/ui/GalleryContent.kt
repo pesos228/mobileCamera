@@ -1,4 +1,4 @@
-package com.android.mobilecamera.screens.gallery
+package com.android.mobilecamera.feature.gallery
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
