@@ -1,41 +1,59 @@
 package com.android.mobilecamera.feature.gallery.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.android.mobilecamera.data.database.MediaEntity
-import com.android.mobilecamera.feature.gallery.MediaItem
+import com.android.mobilecamera.feature.gallery.GalleryUiState
+import com.android.mobilecamera.feature.gallery.groupByDate
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GalleryContent(
-    mediaList: List<MediaEntity>,
+    uiState: GalleryUiState,
+    onMediaClick: (Int) -> Unit,
+    onMediaLongClick: (Int) -> Unit,
     onClearClick: () -> Unit,
-    onAddMockClick: () -> Unit
+    onAddMockClick: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    onClearSelection: () -> Unit
 ) {
+    BackHandler(enabled = uiState.isSelectionMode) {
+        onClearSelection()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        val groupedMedia = uiState.mediaList.groupByDate()
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
+                top = if (uiState.isSelectionMode)
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 56.dp
+                else
+                    WindowInsets.statusBars.asPaddingValues().calculateTopPadding(),
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 88.dp,
                 start = 2.dp,
                 end = 2.dp
@@ -43,18 +61,63 @@ fun GalleryContent(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            items(mediaList, key = { it.id }) { item ->
-                MediaItem(item)
+            groupedMedia.forEach { group ->
+                item(
+                    key = "header_${group.date}",
+                    span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }
+                ) {
+                    Text(
+                        text = group.date,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    )
+                }
+
+                items(
+                    items = group.items,
+                    key = { it.id }
+                ) { item ->
+                    Box(
+                        modifier = Modifier
+                            .animateItem()
+                            .combinedClickable(
+                                onClick = { onMediaClick(item.id) },
+                                onLongClick = { onMediaLongClick(item.id) }
+                            )
+                    ) {
+                        MediaItemWithSelection(
+                            item = item,
+                            isSelected = item.id in uiState.selectedItems,
+                            isSelectionMode = uiState.isSelectionMode
+                        )
+                    }
+                }
             }
         }
 
-        if (mediaList.isEmpty()) {
-            Text(
-                text = "Галерея пуста...\nНажми + для теста",
-                color = Color.White.copy(alpha = 0.6f),
+        if (uiState.mediaList.isEmpty()) {
+            Column(
                 modifier = Modifier.align(Alignment.Center),
-                textAlign = TextAlign.Center
-            )
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Галерея пуста",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Нажмите + для создания тестовых данных",
+                    color = Color.White.copy(alpha = 0.4f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
 
         Box(
@@ -69,28 +132,89 @@ fun GalleryContent(
                 )
         )
 
-        FloatingActionButton(
-            onClick = onClearClick,
-            containerColor = Color(0xFFF44336),
-            contentColor = Color.White,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-                .navigationBarsPadding()
-        ) {
-            Icon(Icons.Default.Delete, contentDescription = "Очистить")
+        if (uiState.isSelectionMode) {
+            SelectionTopBar(
+                selectedCount = uiState.selectedItems.size,
+                onClearSelection = onClearSelection,
+                onDeleteSelected = onDeleteSelected,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+            )
         }
 
-        FloatingActionButton(
-            onClick = onAddMockClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = Color.White,
+        if (!uiState.isSelectionMode) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                FloatingActionButton(
+                    onClick = onClearClick,
+                    containerColor = Color(0xFFF44336),
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Очистить всё")
+                }
+
+                FloatingActionButton(
+                    onClick = onAddMockClick,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Добавить тестовые данные")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionTopBar(
+    selectedCount: Int,
+    onClearSelection: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF1E1E1E),
+        tonalElevation = 3.dp
+    ) {
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .navigationBarsPadding()
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Добавить")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onClearSelection) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Отменить",
+                        tint = Color.White
+                    )
+                }
+                Text(
+                    text = "$selectedCount",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            IconButton(onClick = onDeleteSelected) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Удалить",
+                    tint = Color(0xFFF44336)
+                )
+            }
         }
     }
 }

@@ -94,4 +94,12 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    val media3_version = "1.9.0"
+    implementation("androidx.media3:media3-exoplayer:$media3_version")
+    implementation("androidx.media3:media3-ui-compose:$media3_version")
+    implementation("androidx.media3:media3-ui-compose-material3:$media3_version")
+
+    implementation("androidx.media3:media3-common:${media3_version}")
+    implementation("androidx.media3:media3-ui:${media3_version}")
 }
