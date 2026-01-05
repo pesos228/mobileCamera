@@ -77,9 +77,16 @@ fun CameraRoute(
         onSwitchMode = { viewModel.toggleCameraMode() },
         onSwitchCamera = { viewModel.switchCamera() },
         onToggleFlash = { viewModel.toggleFlash() },
-        onAspectRatioChange = { viewModel.setAspectRatio(it) }, // ← ДОБАВИЛИ
+        onAspectRatioChange = { viewModel.setAspectRatio(it) },
         onControllerCreated = { provider, previewView, owner ->
-            viewModel.bindCamera(provider, previewView, owner)
+            // ========== ПЕРЕДАЕМ CALLBACK ==========
+            viewModel.bindCamera(
+                provider = provider,
+                onSetupPreview = { preview ->
+                    preview.surfaceProvider = previewView.surfaceProvider
+                },
+                owner = owner
+            )
         },
         onNavigateToGallery = onNavigateToGallery
     )

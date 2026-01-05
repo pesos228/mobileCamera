@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.provider.MediaStore
 import android.util.Log
 import androidx.camera.core.*
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
@@ -40,7 +42,7 @@ data class CameraUiState(
     val cameraControl: CameraControl? = null,
     val cameraInfo: CameraInfo? = null,
     val isTorchOn: Boolean = false,
-    val aspectRatio: Int = AspectRatio.RATIO_4_3 // ← ДОБАВИЛИ
+    val aspectRatio: Int = AspectRatio.RATIO_4_3
 )
 
 sealed class CameraEvent {
@@ -64,37 +66,48 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var lifecycleOwner: LifecycleOwner? = null
-    private var previewView: androidx.camera.view.PreviewView? = null // ← ДОБАВИЛИ
+
+    // ========== ИСПРАВЛЕНО: callback для установки SurfaceProvider ==========
+    private var onPreviewCreated: ((Preview) -> Unit)? = null
 
     private var activeRecording: Recording? = null
 
     fun bindCamera(
         provider: ProcessCameraProvider,
-        pView: androidx.camera.view.PreviewView,
+        onSetupPreview: (Preview) -> Unit, // ← НОВЫЙ ПАРАМЕТР: callback для настройки preview
         owner: LifecycleOwner
     ) {
         cameraProvider = provider
         lifecycleOwner = owner
-        previewView = pView // ← СОХРАНЯЕМ
+        onPreviewCreated = onSetupPreview // Сохраняем callback
 
         createUseCases()
         rebindUseCases()
     }
 
-    // ========== НОВАЯ ФУНКЦИЯ: СОЗДАНИЕ USE CASES ==========
     private fun createUseCases() {
         val currentAspectRatio = _uiState.value.aspectRatio
 
-        preview = Preview.Builder()
-            .setTargetAspectRatio(currentAspectRatio)
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(
+                AspectRatioStrategy(
+                    currentAspectRatio,
+                    AspectRatioStrategy.FALLBACK_RULE_AUTO
+                )
+            )
             .build()
-            .apply {
-                previewView?.let { setSurfaceProvider(it.surfaceProvider) }
+
+        preview = Preview.Builder()
+            .setResolutionSelector(resolutionSelector)
+            .build()
+            .also { previewUseCase ->
+                // ========== ВЫЗЫВАЕМ CALLBACK ==========
+                onPreviewCreated?.invoke(previewUseCase)
             }
 
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-            .setTargetAspectRatio(currentAspectRatio)
+            .setResolutionSelector(resolutionSelector)
             .setFlashMode(_uiState.value.flashMode)
             .build()
 
@@ -137,7 +150,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
-            // Восстанавливаем состояние фонарика
             if (_uiState.value.isTorchOn) {
                 camera?.cameraControl?.enableTorch(true)
             }
@@ -312,7 +324,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(isTorchOn = newTorchState) }
     }
 
-    // ========== НОВАЯ ФУНКЦИЯ: ПЕРЕКЛЮЧЕНИЕ ASPECT RATIO ==========
     fun setAspectRatio(ratio: Int) {
         if (_uiState.value.isRecording) {
             viewModelScope.launch {
@@ -323,9 +334,22 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
         _uiState.update { it.copy(aspectRatio = ratio) }
 
-        // Пересоздаем use cases с новым соотношением
         createUseCases()
         rebindUseCases()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        onPreviewCreated = null
+        cameraProvider?.unbindAll()
+        cameraProvider = null
+        camera = null
+        preview = null
+        imageCapture = null
+        videoCapture = null
+        lifecycleOwner = null
+        activeRecording?.close()
+        activeRecording = null
     }
 }
 
