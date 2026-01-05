@@ -88,6 +88,7 @@ fun CameraRoute(
                 owner = owner
             )
         },
-        onNavigateToGallery = onNavigateToGallery
+        onNavigateToGallery = onNavigateToGallery,
+        onCameraInitError = {viewModel.onCameraInitError(it)}
     )
 }

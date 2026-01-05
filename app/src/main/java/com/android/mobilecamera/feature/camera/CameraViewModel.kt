@@ -42,7 +42,8 @@ data class CameraUiState(
     val cameraControl: CameraControl? = null,
     val cameraInfo: CameraInfo? = null,
     val isTorchOn: Boolean = false,
-    val aspectRatio: Int = AspectRatio.RATIO_4_3
+    val aspectRatio: Int = AspectRatio.RATIO_4_3,
+    val isCameraAvailable: Boolean = true
 )
 
 sealed class CameraEvent {
@@ -85,25 +86,27 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         rebindUseCases()
     }
 
-    private fun createUseCases() {
-        val currentAspectRatio = _uiState.value.aspectRatio
-
-        val resolutionSelector = ResolutionSelector.Builder()
-            .setAspectRatioStrategy(
-                AspectRatioStrategy(
-                    currentAspectRatio,
-                    AspectRatioStrategy.FALLBACK_RULE_AUTO
+    private fun createUseCases(forceDefault: Boolean = false) {
+        // Если форсим дефолт, то не указываем стратегию (CameraX сам выберет лучшее, обычно 4:3 для фото, 16:9 для видео)
+        val resolutionSelector = if (forceDefault) {
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .build()
+        } else {
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(
+                    AspectRatioStrategy(
+                        _uiState.value.aspectRatio,
+                        AspectRatioStrategy.FALLBACK_RULE_AUTO
+                    )
                 )
-            )
-            .build()
+                .build()
+        }
 
         preview = Preview.Builder()
             .setResolutionSelector(resolutionSelector)
             .build()
-            .also { previewUseCase ->
-                // ========== ВЫЗЫВАЕМ CALLBACK ==========
-                onPreviewCreated?.invoke(previewUseCase)
-            }
+            .also { onPreviewCreated?.invoke(it) }
 
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
@@ -111,54 +114,78 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             .setFlashMode(_uiState.value.flashMode)
             .build()
 
-        val qualitySelector = QualitySelector.fromOrderedList(
-            listOf(Quality.FHD, Quality.HD, Quality.SD),
-            FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
-        )
+        // Для видео Recorder тоже надо настроить аккуратно
+        val recorderBuilder = Recorder.Builder()
+            .setQualitySelector(
+                QualitySelector.fromOrderedList(
+                    listOf(Quality.FHD, Quality.HD, Quality.SD),
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                )
+            )
 
-        val recorder = Recorder.Builder()
-            .setQualitySelector(qualitySelector)
-            .setAspectRatio(currentAspectRatio)
-            .build()
+        // Устанавливаем AspectRatio только если НЕ форсим дефолт
+        if (!forceDefault) {
+            recorderBuilder.setAspectRatio(_uiState.value.aspectRatio)
+        }
 
-        videoCapture = VideoCapture.withOutput(recorder)
+        videoCapture = VideoCapture.withOutput(recorderBuilder.build())
     }
 
     private fun rebindUseCases() {
         val provider = cameraProvider ?: return
         val owner = lifecycleOwner ?: return
 
-        try {
-            provider.unbindAll()
+        // Функция для попытки привязки
+        fun bind(useCustomAspectRatio: Boolean) {
+            try {
+                provider.unbindAll()
 
-            val cameraSelector = CameraSelector.Builder()
-                .requireLensFacing(_uiState.value.lensFacing)
-                .build()
+                val cameraSelector = CameraSelector.Builder()
+                    .requireLensFacing(_uiState.value.lensFacing)
+                    .build()
 
-            camera = provider.bindToLifecycle(
-                owner,
-                cameraSelector,
-                preview,
-                imageCapture,
-                videoCapture
-            )
+                // Если это повторная попытка (useCustomAspectRatio = false),
+                // то пересоздаем UseCases без жестких требований к AspectRatio
+                if (!useCustomAspectRatio) {
+                    createUseCases(forceDefault = true)
+                }
 
-            _uiState.update {
-                it.copy(
-                    cameraControl = camera?.cameraControl,
-                    cameraInfo = camera?.cameraInfo
+                camera = provider.bindToLifecycle(
+                    owner,
+                    cameraSelector,
+                    preview,
+                    imageCapture,
+                    videoCapture
                 )
-            }
 
-            // --- ИСПРАВЛЕНИЕ 1 ---
-            // Включаем фонарик только если он должен быть включен И мы в режиме видео
-            if (_uiState.value.isTorchOn && _uiState.value.isVideoMode) {
-                camera?.cameraControl?.enableTorch(true)
-            }
+                _uiState.update {
+                    it.copy(
+                        cameraControl = camera?.cameraControl,
+                        cameraInfo = camera?.cameraInfo,
+                        isCameraAvailable = true // Камера заработала
+                    )
+                }
 
-        } catch (e: Exception) {
-            Log.e("CameraVM", "Use case binding failed", e)
+                if (_uiState.value.isTorchOn && _uiState.value.isVideoMode) {
+                    camera?.cameraControl?.enableTorch(true)
+                }
+
+            } catch (e: Exception) {
+                Log.e("CameraVM", "Binding failed with custom ratio: $useCustomAspectRatio", e)
+
+                if (useCustomAspectRatio) {
+                    // ЕСЛИ УПАЛО С НАСТРОЙКАМИ ЮЗЕРА -> ПРОБУЕМ ДЕФОЛТНЫЕ
+                    Log.w("CameraVM", "Retrying with default configuration...")
+                    bind(useCustomAspectRatio = false)
+                } else {
+                    // Если упало даже с дефолтными -> все плохо
+                    onCameraInitError(e)
+                }
+            }
         }
+
+        // Запускаем первую попытку с текущими настройками
+        bind(useCustomAspectRatio = true)
     }
 
     fun toggleCameraMode() {
@@ -202,10 +229,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val name = "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())}"
+
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileCamera")
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileCamera")
+            }
         }
 
         val outputOptions = ImageCapture.OutputFileOptions.Builder(
@@ -254,7 +285,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, name)
                 put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MobileCamera")
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MobileCamera")
+                }
             }
 
             val outputOptions = MediaStoreOutputOptions.Builder(
@@ -390,6 +423,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         lifecycleOwner = null
         activeRecording?.close()
         activeRecording = null
+    }
+
+    fun onCameraInitError(e: Exception) {
+        _uiState.update { it.copy(isCameraAvailable = false) }
+        viewModelScope.launch {
+            _events.send(CameraEvent.ShowToast("Ошибка инициализации камеры: ${e.message}"))
+        }
     }
 }
 

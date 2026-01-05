@@ -16,7 +16,7 @@ fun PhotoViewer(path: String) {
             .data(path.toUri())
             .build(),
         contentDescription = null,
-        contentScale = ContentScale.Inside,
+        contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize()
     )
 }

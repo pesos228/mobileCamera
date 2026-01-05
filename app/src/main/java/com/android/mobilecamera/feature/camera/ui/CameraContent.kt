@@ -47,6 +47,7 @@ fun CameraScreenContent(
     showRationaleDialog: Boolean,
     onRationaleDismiss: () -> Unit,
     onRationaleConfirm: () -> Unit,
+    onCameraInitError: (Exception) -> Unit,
 ) {
     if (showRationaleDialog) {
         AlertDialog(
@@ -64,6 +65,31 @@ fun CameraScreenContent(
                 }
             }
         )
+    }
+
+    if (!uiState.isCameraAvailable) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.BrokenImage,
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(64.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Камера недоступна на этом устройстве",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+        return
     }
 
     if (!hasPermission) {
@@ -122,9 +148,14 @@ fun CameraScreenContent(
                 }
                 val cameraProviderFuture = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
-                    onControllerCreated(cameraProvider, previewView, lifecycleOwner)
+                    try {
+                        val cameraProvider = cameraProviderFuture.get()
+                        onControllerCreated(cameraProvider, previewView, lifecycleOwner)
+                    } catch (e: Exception) {
+                        onCameraInitError(e)
+                    }
                 }, ContextCompat.getMainExecutor(ctx))
+
                 previewView
             }
         )
