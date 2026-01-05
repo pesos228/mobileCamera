@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.net.toUri
@@ -41,14 +40,15 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun VideoPlayer(path: String) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    // Добавляем состояние видимости
+    var isPlayerVisible by remember { mutableStateOf(false) }
 
     // -- STATE --
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(true) }
-
-    // Видимость контролов
     var areControlsVisible by remember { mutableStateOf(true) }
     var isSeeking by remember { mutableStateOf(false) }
 
@@ -62,8 +62,13 @@ fun VideoPlayer(path: String) {
         }
     }
 
-    // -- LOGIC --
+    // Показываем плеер после инициализации
+    LaunchedEffect(exoPlayer) {
+        delay(50) // Небольшая задержка для плавности
+        isPlayerVisible = true
+    }
 
+    // -- LOGIC --
     LaunchedEffect(exoPlayer) {
         while (isActive) {
             currentPosition = exoPlayer.currentPosition
@@ -81,16 +86,26 @@ fun VideoPlayer(path: String) {
         }
     }
 
-    // Lifecycle
+    // Lifecycle с немедленным освобождением
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE) {
-                exoPlayer.pause()
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    exoPlayer.pause()
+                }
+                Lifecycle.Event.ON_STOP -> {
+                    // Скрываем плеер перед освобождением
+                    isPlayerVisible = false
+                }
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Немедленно останавливаем воспроизведение
+            exoPlayer.stop()
             exoPlayer.release()
         }
     }
@@ -101,31 +116,39 @@ fun VideoPlayer(path: String) {
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // 1. Видео
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) {
-                    areControlsVisible = !areControlsVisible
-                }
-        )
+        // Показываем видео только когда isPlayerVisible == true
+        if (isPlayerVisible) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                update = { playerView ->
+                    // При обновлении убеждаемся, что плеер привязан
+                    if (playerView.player != exoPlayer) {
+                        playerView.player = exoPlayer
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        areControlsVisible = !areControlsVisible
+                    }
+            )
+        }
 
-        // 2. Центральная кнопка Play/Pause (Большая)
+        // Остальной код остаётся без изменений
         AnimatedVisibility(
             visible = areControlsVisible || !isPlaying,
             enter = fadeIn(),
@@ -141,7 +164,6 @@ fun VideoPlayer(path: String) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // ВОТ ЗДЕСЬ ДЕЛАЕМ КНОПКУ БЕЛОЙ
                 CompositionLocalProvider(LocalContentColor provides Color.White) {
                     PlayPauseButton(
                         player = exoPlayer,
@@ -151,7 +173,6 @@ fun VideoPlayer(path: String) {
             }
         }
 
-        // 3. Нижняя панель
         AnimatedVisibility(
             visible = areControlsVisible,
             enter = fadeIn(),

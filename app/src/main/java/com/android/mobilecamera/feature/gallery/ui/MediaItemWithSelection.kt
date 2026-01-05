@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import coil.request.videoFrameMillis
 import com.android.mobilecamera.data.database.MediaEntity
 import com.android.mobilecamera.data.database.MediaType
+import com.android.mobilecamera.feature.gallery.ImageLoaderProvider
 import kotlin.random.Random
 
 @Composable
@@ -37,29 +39,42 @@ fun MediaItemWithSelection(
     isSelected: Boolean,
     isSelectionMode: Boolean
 ) {
+    val context = LocalContext.current
+    val imageLoader = remember { ImageLoaderProvider.get(context) }
+
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .background(Color.DarkGray)
     ) {
         if (item.path.startsWith("mock_")) {
+            // Мок-данные - цветной квадрат
             val color = remember(item.id) {
                 val rnd = Random(item.id)
                 Color(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256))
             }
             Box(modifier = Modifier.fillMaxSize().background(color))
         } else {
+            // Реальные медиафайлы
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(context)
                     .data(item.path.toUri())
+                    .apply {
+                        // Для видео извлекаем первый кадр
+                        if (item.type == MediaType.VIDEO) {
+                            videoFrameMillis(0) // Первый кадр (0 мс)
+                        }
+                    }
                     .crossfade(true)
                     .build(),
+                imageLoader = imageLoader,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
         }
 
+        // Затемнение при выборе
         if (isSelected) {
             Box(
                 modifier = Modifier
@@ -68,6 +83,7 @@ fun MediaItemWithSelection(
             )
         }
 
+        // Иконка воспроизведения для видео
         if (item.type == MediaType.VIDEO) {
             Icon(
                 imageVector = Icons.Default.PlayCircle,
@@ -79,6 +95,7 @@ fun MediaItemWithSelection(
                     .size(24.dp)
             )
 
+            // Длительность видео
             item.duration?.let { durationMillis ->
                 Text(
                     text = formatDuration(durationMillis),
@@ -96,6 +113,7 @@ fun MediaItemWithSelection(
             }
         }
 
+        // Индикатор выбора
         AnimatedVisibility(
             visible = isSelectionMode,
             enter = fadeIn(),
@@ -115,6 +133,7 @@ fun MediaItemWithSelection(
             )
         }
 
+        // Рамка при выборе
         if (isSelected) {
             Box(
                 modifier = Modifier
