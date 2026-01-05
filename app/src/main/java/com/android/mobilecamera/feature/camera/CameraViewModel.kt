@@ -150,7 +150,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
-            if (_uiState.value.isTorchOn) {
+            // --- ИСПРАВЛЕНИЕ 1 ---
+            // Включаем фонарик только если он должен быть включен И мы в режиме видео
+            if (_uiState.value.isTorchOn && _uiState.value.isVideoMode) {
                 camera?.cameraControl?.enableTorch(true)
             }
 
@@ -160,7 +162,26 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun toggleCameraMode() {
-        _uiState.update { it.copy(isVideoMode = !it.isVideoMode) }
+        val currentUiState = _uiState.value
+        val newIsVideoMode = !currentUiState.isVideoMode
+
+        if (newIsVideoMode) {
+            // Переключаемся НА ВИДЕО
+            // Если в памяти осталось, что фонарик был включен (isTorchOn == true),
+            // то включаем его обратно физически
+            if (currentUiState.isTorchOn) {
+                camera?.cameraControl?.enableTorch(true)
+            }
+        } else {
+            // Переключаемся НА ФОТО
+            // Выключаем фонарик физически, чтобы он не горел на экране фото.
+            // ВАЖНО: Мы НЕ меняем state (isTorchOn остается true),
+            // чтобы запомнить выбор пользователя.
+            camera?.cameraControl?.enableTorch(false)
+        }
+
+        // Обновляем режим в UI
+        _uiState.update { it.copy(isVideoMode = newIsVideoMode) }
     }
 
     fun onCaptureClick() {
