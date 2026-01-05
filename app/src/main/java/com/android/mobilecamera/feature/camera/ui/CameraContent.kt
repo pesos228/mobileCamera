@@ -76,7 +76,6 @@ fun CameraScreenContent(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val density = LocalDensity.current
 
-    // ========== СОСТОЯНИЕ ДЛЯ ФОКУСА ==========
     var focusPoint by remember { mutableStateOf<Offset?>(null) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -85,30 +84,24 @@ fun CameraScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(uiState.cameraControl) {
-                    // ========== TAP TO FOCUS ==========
                     detectTapGestures { offset ->
                         val cameraControl = uiState.cameraControl ?: return@detectTapGestures
 
-                        // Создаем MeteringPoint
                         val factory = SurfaceOrientedMeteringPointFactory(
                             size.width.toFloat(),
                             size.height.toFloat()
                         )
                         val point = factory.createPoint(offset.x, offset.y)
 
-                        // Запускаем фокусировку
                         val action = FocusMeteringAction.Builder(point)
                             .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
                             .build()
 
                         cameraControl.startFocusAndMetering(action)
-
-                        // Показываем индикатор фокуса
                         focusPoint = offset
                     }
                 }
                 .pointerInput(uiState.cameraControl, uiState.cameraInfo) {
-                    // ========== PINCH TO ZOOM ==========
                     detectTransformGestures { _, _, zoom, _ ->
                         val cameraControl = uiState.cameraControl ?: return@detectTransformGestures
                         val cameraInfo = uiState.cameraInfo ?: return@detectTransformGestures
@@ -134,7 +127,7 @@ fun CameraScreenContent(
             }
         )
 
-        // ========== ИНДИКАТОР ФОКУСА ==========
+        // Индикатор фокуса
         focusPoint?.let { point ->
             LaunchedEffect(point) {
                 kotlinx.coroutines.delay(1500)
@@ -191,21 +184,35 @@ fun CameraScreenContent(
             }
         }
 
-        // Вспышка
-        if (!uiState.isRecording) {
-            IconButton(
-                onClick = onToggleFlash,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(top = 16.dp, start = 16.dp)
-            ) {
-                Icon(
-                    imageVector = if (uiState.flashMode == 0) Icons.Default.FlashOff else Icons.Default.FlashOn,
-                    contentDescription = "Flash",
-                    tint = Color.White
-                )
+        // ========== ОБНОВЛЕННАЯ КНОПКА ВСПЫШКИ ==========
+        // Показываем всегда (и для фото, и для видео)
+        IconButton(
+            onClick = onToggleFlash,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(top = 16.dp, start = 16.dp)
+        ) {
+            val flashIcon = when {
+                // Видео режим: показываем состояние фонарика
+                uiState.isVideoMode -> {
+                    if (uiState.isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff
+                }
+                // Фото режим: показываем flash mode
+                else -> {
+                    if (uiState.flashMode == ImageCapture.FLASH_MODE_OFF) {
+                        Icons.Default.FlashOff
+                    } else {
+                        Icons.Default.FlashOn
+                    }
+                }
             }
+
+            Icon(
+                imageVector = flashIcon,
+                contentDescription = "Flash",
+                tint = Color.White
+            )
         }
 
         // Нижняя панель

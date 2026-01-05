@@ -37,8 +37,9 @@ data class CameraUiState(
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
     val flashMode: Int = ImageCapture.FLASH_MODE_OFF,
     val showFlashAnimation: Boolean = false,
-    val cameraControl: CameraControl? = null, // ← ДОБАВИЛИ
-    val cameraInfo: CameraInfo? = null // ← ДОБАВИЛИ
+    val cameraControl: CameraControl? = null,
+    val cameraInfo: CameraInfo? = null,
+    val isTorchOn: Boolean = false // ← НОВОЕ: состояние фонарика
 )
 
 sealed class CameraEvent {
@@ -116,12 +117,16 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 videoCapture
             )
 
-            // ========== ПЕРЕДАЕМ CAMERA CONTROL В UI STATE ==========
             _uiState.update {
                 it.copy(
                     cameraControl = camera?.cameraControl,
                     cameraInfo = camera?.cameraInfo
                 )
+            }
+
+            // ========== ВОССТАНАВЛИВАЕМ СОСТОЯНИЕ ФОНАРИКА ==========
+            if (_uiState.value.isTorchOn) {
+                camera?.cameraControl?.enableTorch(true)
             }
 
         } catch (e: Exception) {
@@ -274,14 +279,27 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         rebindUseCases()
     }
 
+    // ========== ОБНОВЛЕННАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВСПЫШКИ ==========
     fun toggleFlash() {
-        val newFlash = if (_uiState.value.flashMode == ImageCapture.FLASH_MODE_OFF) {
-            ImageCapture.FLASH_MODE_ON
+        if (_uiState.value.isVideoMode) {
+            // Для видео переключаем фонарик (torch)
+            toggleTorch()
         } else {
-            ImageCapture.FLASH_MODE_OFF
+            // Для фото переключаем flash mode
+            val newFlash = if (_uiState.value.flashMode == ImageCapture.FLASH_MODE_OFF) {
+                ImageCapture.FLASH_MODE_ON
+            } else {
+                ImageCapture.FLASH_MODE_OFF
+            }
+            imageCapture?.flashMode = newFlash
+            _uiState.update { it.copy(flashMode = newFlash) }
         }
-        imageCapture?.flashMode = newFlash
-        _uiState.update { it.copy(flashMode = newFlash) }
+    }
+
+    private fun toggleTorch() {
+        val newTorchState = !_uiState.value.isTorchOn
+        camera?.cameraControl?.enableTorch(newTorchState)
+        _uiState.update { it.copy(isTorchOn = newTorchState) }
     }
 }
 
