@@ -39,7 +39,8 @@ data class CameraUiState(
     val showFlashAnimation: Boolean = false,
     val cameraControl: CameraControl? = null,
     val cameraInfo: CameraInfo? = null,
-    val isTorchOn: Boolean = false // ← НОВОЕ: состояние фонарика
+    val isTorchOn: Boolean = false,
+    val aspectRatio: Int = AspectRatio.RATIO_4_3 // ← ДОБАВИЛИ
 )
 
 sealed class CameraEvent {
@@ -63,23 +64,37 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var lifecycleOwner: LifecycleOwner? = null
+    private var previewView: androidx.camera.view.PreviewView? = null // ← ДОБАВИЛИ
 
     private var activeRecording: Recording? = null
 
     fun bindCamera(
         provider: ProcessCameraProvider,
-        previewView: androidx.camera.view.PreviewView,
+        pView: androidx.camera.view.PreviewView,
         owner: LifecycleOwner
     ) {
         cameraProvider = provider
         lifecycleOwner = owner
+        previewView = pView // ← СОХРАНЯЕМ
 
-        preview = Preview.Builder().build().apply {
-            setSurfaceProvider(previewView.surfaceProvider)
-        }
+        createUseCases()
+        rebindUseCases()
+    }
+
+    // ========== НОВАЯ ФУНКЦИЯ: СОЗДАНИЕ USE CASES ==========
+    private fun createUseCases() {
+        val currentAspectRatio = _uiState.value.aspectRatio
+
+        preview = Preview.Builder()
+            .setTargetAspectRatio(currentAspectRatio)
+            .build()
+            .apply {
+                previewView?.let { setSurfaceProvider(it.surfaceProvider) }
+            }
 
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setTargetAspectRatio(currentAspectRatio)
             .setFlashMode(_uiState.value.flashMode)
             .build()
 
@@ -90,12 +105,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
         val recorder = Recorder.Builder()
             .setQualitySelector(qualitySelector)
-            .setAspectRatio(AspectRatio.RATIO_4_3)
+            .setAspectRatio(currentAspectRatio)
             .build()
 
         videoCapture = VideoCapture.withOutput(recorder)
-
-        rebindUseCases()
     }
 
     private fun rebindUseCases() {
@@ -124,7 +137,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
 
-            // ========== ВОССТАНАВЛИВАЕМ СОСТОЯНИЕ ФОНАРИКА ==========
+            // Восстанавливаем состояние фонарика
             if (_uiState.value.isTorchOn) {
                 camera?.cameraControl?.enableTorch(true)
             }
@@ -279,13 +292,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         rebindUseCases()
     }
 
-    // ========== ОБНОВЛЕННАЯ ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВСПЫШКИ ==========
     fun toggleFlash() {
         if (_uiState.value.isVideoMode) {
-            // Для видео переключаем фонарик (torch)
             toggleTorch()
         } else {
-            // Для фото переключаем flash mode
             val newFlash = if (_uiState.value.flashMode == ImageCapture.FLASH_MODE_OFF) {
                 ImageCapture.FLASH_MODE_ON
             } else {
@@ -300,6 +310,22 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val newTorchState = !_uiState.value.isTorchOn
         camera?.cameraControl?.enableTorch(newTorchState)
         _uiState.update { it.copy(isTorchOn = newTorchState) }
+    }
+
+    // ========== НОВАЯ ФУНКЦИЯ: ПЕРЕКЛЮЧЕНИЕ ASPECT RATIO ==========
+    fun setAspectRatio(ratio: Int) {
+        if (_uiState.value.isRecording) {
+            viewModelScope.launch {
+                _events.send(CameraEvent.ShowToast("Нельзя менять соотношение во время записи"))
+            }
+            return
+        }
+
+        _uiState.update { it.copy(aspectRatio = ratio) }
+
+        // Пересоздаем use cases с новым соотношением
+        createUseCases()
+        rebindUseCases()
     }
 }
 

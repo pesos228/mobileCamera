@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -34,6 +35,7 @@ fun CameraScreenContent(
     onSwitchMode: () -> Unit,
     onSwitchCamera: () -> Unit,
     onToggleFlash: () -> Unit,
+    onAspectRatioChange: (Int) -> Unit, // ← ДОБАВИЛИ
     onControllerCreated: (
         provider: androidx.camera.lifecycle.ProcessCameraProvider,
         previewView: androidx.camera.view.PreviewView,
@@ -116,7 +118,7 @@ fun CameraScreenContent(
                 },
             factory = { ctx ->
                 val previewView = androidx.camera.view.PreviewView(ctx).apply {
-                    scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
+                    scaleType = androidx.camera.view.PreviewView.ScaleType.FIT_CENTER
                 }
                 val cameraProviderFuture = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
@@ -184,8 +186,7 @@ fun CameraScreenContent(
             }
         }
 
-        // ========== ОБНОВЛЕННАЯ КНОПКА ВСПЫШКИ ==========
-        // Показываем всегда (и для фото, и для видео)
+        // Вспышка
         IconButton(
             onClick = onToggleFlash,
             modifier = Modifier
@@ -194,11 +195,9 @@ fun CameraScreenContent(
                 .padding(top = 16.dp, start = 16.dp)
         ) {
             val flashIcon = when {
-                // Видео режим: показываем состояние фонарика
                 uiState.isVideoMode -> {
                     if (uiState.isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff
                 }
-                // Фото режим: показываем flash mode
                 else -> {
                     if (uiState.flashMode == ImageCapture.FLASH_MODE_OFF) {
                         Icons.Default.FlashOff
@@ -213,6 +212,30 @@ fun CameraScreenContent(
                 contentDescription = "Flash",
                 tint = Color.White
             )
+        }
+
+        // ========== КНОПКИ СООТНОШЕНИЯ СТОРОН ==========
+        if (!uiState.isRecording) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, end = 16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                AspectRatioButton(
+                    text = "4:3",
+                    isSelected = uiState.aspectRatio == AspectRatio.RATIO_4_3,
+                    onClick = { onAspectRatioChange(AspectRatio.RATIO_4_3) }
+                )
+                AspectRatioButton(
+                    text = "16:9",
+                    isSelected = uiState.aspectRatio == AspectRatio.RATIO_16_9,
+                    onClick = { onAspectRatioChange(AspectRatio.RATIO_16_9) }
+                )
+            }
         }
 
         // Нижняя панель
@@ -282,6 +305,33 @@ fun CameraScreenContent(
                 }
             }
         }
+    }
+}
+
+// ========== НОВЫЙ КОМПОНЕНТ ==========
+@Composable
+fun AspectRatioButton(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val containerColor = if (isSelected) Color.Yellow else Color.Transparent
+    val contentColor = if (isSelected) Color.Black else Color.White
+
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.height(32.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall
+        )
     }
 }
 
