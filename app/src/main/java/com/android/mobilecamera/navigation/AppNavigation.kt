@@ -28,11 +28,11 @@ fun AppNavigation() {
             )
         }
 
-        composable("gallery") {
+        composable(Screen.Gallery.route) {
             GalleryRoute(
                 onNavigateToViewer = { mediaId ->
                     navController.currentBackStackEntry?.let {
-                        navController.navigate("viewer/$mediaId") {
+                        navController.navigate(Screen.Viewer.createRoute(mediaId)) {
                             launchSingleTop = true
                         }
                     }

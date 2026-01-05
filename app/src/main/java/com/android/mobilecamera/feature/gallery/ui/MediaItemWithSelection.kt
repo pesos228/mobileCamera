@@ -1,5 +1,6 @@
 package com.android.mobilecamera.feature.gallery.ui
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,12 +24,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.mobilecamera.data.database.MediaEntity
 import com.android.mobilecamera.data.database.MediaType
-import com.android.mobilecamera.feature.gallery.formatDuration
-import java.io.File
 import kotlin.random.Random
 
 @Composable
@@ -51,7 +51,7 @@ fun MediaItemWithSelection(
         } else {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(File(item.path))
+                    .data(item.path.toUri())
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
@@ -123,4 +123,12 @@ fun MediaItemWithSelection(
             )
         }
     }
+}
+
+@SuppressLint("DefaultLocale")
+private fun formatDuration(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%02d:%02d", minutes, seconds)
 }

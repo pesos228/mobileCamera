@@ -1,23 +1,39 @@
 package com.android.mobilecamera.feature.camera
 
 import android.app.Activity
+import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.mobilecamera.feature.camera.ui.CameraScreenContent
 
 @Composable
 fun CameraRoute(
-    onNavigateToGallery: () -> Unit
+    onNavigateToGallery: () -> Unit,
+    viewModel: CameraViewModel = viewModel(
+        factory = CameraViewModelFactory(LocalContext.current.applicationContext as Application)
+    )
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val uiState by viewModel.uiState.collectAsState()
 
     var hasPermission by remember { mutableStateOf(context.hasCameraAccess()) }
     var showRationaleDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is CameraEvent.ShowToast -> {
+                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -25,7 +41,7 @@ fun CameraRoute(
         if (permissions.entries.all { it.value }) {
             hasPermission = true
         } else {
-            Toast.makeText(context, "Нужны права :(", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Нужны права для работы камеры", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -42,17 +58,27 @@ fun CameraRoute(
     }
 
     LaunchedEffect(Unit) {
-        if (!context.hasCameraAccess()) checkAndRequestPermissions()
+        if (!context.hasCameraAccess()) {
+            checkAndRequestPermissions()
+        }
     }
 
     CameraScreenContent(
+        uiState = uiState,
         hasPermission = hasPermission,
-        showRationaleDialog = showRationaleDialog,
         onPermissionRequest = { checkAndRequestPermissions() },
+        showRationaleDialog = showRationaleDialog,
         onRationaleDismiss = { showRationaleDialog = false },
         onRationaleConfirm = {
             showRationaleDialog = false
             permissionLauncher.launch(requiredCameraPermissions)
+        },
+        onCapture = { viewModel.onCaptureClick() },
+        onSwitchMode = { viewModel.toggleCameraMode() },
+        onSwitchCamera = { viewModel.switchCamera() },
+        onToggleFlash = { viewModel.toggleFlash() },
+        onControllerCreated = { provider, previewView, owner ->
+            viewModel.bindCamera(provider, previewView, owner)
         },
         onNavigateToGallery = onNavigateToGallery
     )

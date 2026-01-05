@@ -28,42 +28,55 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlin {
         compilerOptions {
             jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
         }
     }
+
     buildFeatures {
-        viewBinding = true
         compose = true
     }
 }
 
 dependencies {
-
+    // Базовые AndroidX
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    implementation(libs.androidx.activity)
-    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.media3.ui)
+
+    // Тесты
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    val nav_version = "2.9.6"
-    implementation("androidx.navigation:navigation-fragment-ktx:$nav_version")
-    implementation("androidx.navigation:navigation-ui-ktx:$nav_version")
-
+    // ===== COMPOSE =====
     val composeBom = platform("androidx.compose:compose-bom:2025.12.01")
     implementation(composeBom)
-    implementation("androidx.navigation:navigation-compose")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("io.coil-kt:coil-compose:2.7.0")// Из BOM
+    androidTestImplementation(composeBom)
 
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Compose Activity
+    implementation("androidx.activity:activity-compose:1.12.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+
+    // ===== NAVIGATION (только Compose) =====
+    implementation("androidx.navigation:navigation-compose:2.9.6")
+
+    // ===== CAMERAX =====
     val camerax_version = "1.5.2"
     implementation("androidx.camera:camera-core:$camerax_version")
     implementation("androidx.camera:camera-camera2:$camerax_version")
@@ -71,35 +84,22 @@ dependencies {
     implementation("androidx.camera:camera-view:$camerax_version")
     implementation("androidx.camera:camera-extensions:$camerax_version")
 
+    // ===== ROOM =====
     val room_version = "2.8.4"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     ksp("androidx.room:room-compiler:$room_version")
 
+    // ===== COIL (загрузка изображений и видео) =====
     val coil_version = "2.7.0"
-    implementation("io.coil-kt:coil:$coil_version")
+    implementation("io.coil-kt:coil-compose:$coil_version")
     implementation("io.coil-kt:coil-video:$coil_version")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-
-    androidTestImplementation(composeBom)
-
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-
-    implementation("androidx.activity:activity-compose:1.12.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
-
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
-
+    // ===== MEDIA3 (ExoPlayer для видео) =====
     val media3_version = "1.9.0"
     implementation("androidx.media3:media3-exoplayer:$media3_version")
-    implementation("androidx.media3:media3-ui-compose:$media3_version")
     implementation("androidx.media3:media3-ui-compose-material3:$media3_version")
 
-    implementation("androidx.media3:media3-common:${media3_version}")
-    implementation("androidx.media3:media3-ui:${media3_version}")
+    // ===== COROUTINES =====
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }
