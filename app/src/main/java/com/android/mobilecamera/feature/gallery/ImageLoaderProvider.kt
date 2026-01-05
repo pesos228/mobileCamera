@@ -18,19 +18,21 @@ object ImageLoaderProvider {
                 }
                 .memoryCache {
                     MemoryCache.Builder(context)
-                        .maxSizePercent(0.25) // 25% RAM
+                        .maxSizePercent(0.25)
                         .build()
                 }
                 .diskCache {
                     DiskCache.Builder()
                         .directory(context.cacheDir.resolve("image_cache"))
-                        .maxSizeBytes(100 * 1024 * 1024) // 100 MB
+                        .maxSizeBytes(500L * 1024 * 1024)
                         .build()
                 }
-                .crossfade(150) // Быстрая анимация
+                .allowHardware(true)
+                .crossfade(false)
                 .respectCacheHeaders(false)
+
                 .build()
-                .also { instance = it }
+
         }
     }
 }

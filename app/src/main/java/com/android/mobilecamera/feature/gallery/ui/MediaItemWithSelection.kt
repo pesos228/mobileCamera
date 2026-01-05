@@ -1,6 +1,7 @@
 package com.android.mobilecamera.feature.gallery.ui
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,9 +29,12 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import coil.request.videoFrameMillis
+import coil.size.Precision
+import coil.size.Size
 import com.android.mobilecamera.data.database.MediaEntity
 import com.android.mobilecamera.data.database.MediaType
 import com.android.mobilecamera.feature.gallery.ImageLoaderProvider
+import java.io.File
 import kotlin.random.Random
 
 @Composable
@@ -47,25 +51,33 @@ fun MediaItemWithSelection(
             .aspectRatio(1f)
             .background(Color.DarkGray)
     ) {
+        // === 1. МОКИ ===
         if (item.path.startsWith("mock_")) {
-            // Мок-данные - цветной квадрат
             val color = remember(item.id) {
                 val rnd = Random(item.id)
                 Color(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256))
             }
             Box(modifier = Modifier.fillMaxSize().background(color))
         } else {
-            // Реальные медиафайлы
+            // === 2. ЗАГРУЗКА ===
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(item.path.toUri())
+                    .data(
+                        if (item.thumbnailPath != null) {
+                            File(item.thumbnailPath).toUri()
+                        } else {
+                            item.path.toUri()
+                        }
+                    )
                     .apply {
-                        // Для видео извлекаем первый кадр
-                        if (item.type == MediaType.VIDEO) {
-                            videoFrameMillis(0) // Первый кадр (0 мс)
+                        if (item.type == MediaType.VIDEO && item.thumbnailPath == null) {
+                            videoFrameMillis(1000)
                         }
                     }
-                    .crossfade(true)
+                    .size(Size(300, 300))
+                    .precision(Precision.EXACT)
+                    .bitmapConfig(Bitmap.Config.RGB_565)
+                    .crossfade(false)
                     .build(),
                 imageLoader = imageLoader,
                 contentDescription = null,
@@ -74,7 +86,6 @@ fun MediaItemWithSelection(
             )
         }
 
-        // Затемнение при выборе
         if (isSelected) {
             Box(
                 modifier = Modifier
@@ -83,7 +94,6 @@ fun MediaItemWithSelection(
             )
         }
 
-        // Иконка воспроизведения для видео
         if (item.type == MediaType.VIDEO) {
             Icon(
                 imageVector = Icons.Default.PlayCircle,
@@ -95,7 +105,6 @@ fun MediaItemWithSelection(
                     .size(24.dp)
             )
 
-            // Длительность видео
             item.duration?.let { durationMillis ->
                 Text(
                     text = formatDuration(durationMillis),
@@ -113,7 +122,6 @@ fun MediaItemWithSelection(
             }
         }
 
-        // Индикатор выбора
         AnimatedVisibility(
             visible = isSelectionMode,
             enter = fadeIn(),
@@ -133,7 +141,6 @@ fun MediaItemWithSelection(
             )
         }
 
-        // Рамка при выборе
         if (isSelected) {
             Box(
                 modifier = Modifier

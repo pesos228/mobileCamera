@@ -200,7 +200,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: return
                     viewModelScope.launch {
-                        repository.saveMedia(savedUri.toString(), MediaType.PHOTO)
+
+                        val thumbPath = MediaThumbnailGenerator.generateForPhoto(context, savedUri.toString())
+
+                        repository.saveMedia(
+                            path = savedUri.toString(),
+                            type = MediaType.PHOTO,
+                            thumbnailPath = thumbPath // ✅ Передаем путь
+                        )
                         _events.send(CameraEvent.ShowToast("Фото сохранено"))
                     }
                 }
@@ -260,7 +267,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                             if (event.hasError()) {
                                 if (uri != android.net.Uri.EMPTY && duration > 0) {
                                     viewModelScope.launch {
-                                        repository.saveMedia(uri.toString(), MediaType.VIDEO, duration)
+                                        val thumbPath = MediaThumbnailGenerator.generateForVideo(context, uri.toString())
+                                        repository.saveMedia(
+                                            path = uri.toString(),
+                                            type = MediaType.VIDEO,
+                                            duration = duration,
+                                            thumbnailPath = thumbPath // ✅ Передаем путь
+                                        )
                                         _events.send(CameraEvent.ShowToast("Видео сохранено"))
                                     }
                                 } else {
@@ -270,7 +283,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                             } else {
                                 viewModelScope.launch {
-                                    repository.saveMedia(uri.toString(), MediaType.VIDEO, duration)
+                                    val thumbPath = MediaThumbnailGenerator.generateForVideo(context, uri.toString())
+                                    repository.saveMedia(
+                                        path = uri.toString(),
+                                        type = MediaType.VIDEO,
+                                        duration = duration,
+                                        thumbnailPath = thumbPath // ✅ Передаем путь
+                                    )
                                     _events.send(CameraEvent.ShowToast("Видео сохранено"))
                                 }
                             }

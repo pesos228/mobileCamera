@@ -13,13 +13,15 @@ class MediaRepository(private val mediaDao: MediaDao) {
         path: String,
         type: MediaType,
         duration: Long? = null,
-        timestamp: Long = System.currentTimeMillis()
+        timestamp: Long = System.currentTimeMillis(),
+        thumbnailPath: String? = null
     ) {
         val entity = MediaEntity(
             path = path,
             type = type,
             timestamp = timestamp,
-            duration = duration
+            duration = duration,
+            thumbnailPath = thumbnailPath
         )
         mediaDao.insert(entity)
     }

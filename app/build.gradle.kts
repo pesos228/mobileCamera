@@ -50,6 +50,9 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.media3.ui)
 
+    // ===== EXIF для правильной ориентации фото =====
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+
     // Тесты
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
