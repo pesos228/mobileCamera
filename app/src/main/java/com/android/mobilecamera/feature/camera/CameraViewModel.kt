@@ -2,10 +2,8 @@ package com.android.mobilecamera.feature.camera
 
 import android.Manifest
 import android.app.Application
-import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
-import android.provider.MediaStore
 import android.util.Log
 import androidx.camera.core.*
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
@@ -21,6 +19,8 @@ import androidx.lifecycle.viewModelScope
 import com.android.mobilecamera.data.database.AppDatabase
 import com.android.mobilecamera.data.database.MediaType
 import com.android.mobilecamera.data.repository.MediaRepository
+import com.android.mobilecamera.infrastructure.media.MediaManager
+import com.android.mobilecamera.infrastructure.media.ThumbnailGenerator
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,8 +28,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Locale
 import java.util.concurrent.Executors
 
 data class CameraUiState(
@@ -54,6 +52,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private val context: Context get() = getApplication()
     private val repository = MediaRepository(AppDatabase.getDatabase(context).mediaDao())
+    private val mediaManager = MediaManager(context)
 
     private val _uiState = MutableStateFlow(CameraUiState())
     val uiState = _uiState.asStateFlow()
@@ -68,26 +67,23 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private var videoCapture: VideoCapture<Recorder>? = null
     private var lifecycleOwner: LifecycleOwner? = null
 
-    // ========== ИСПРАВЛЕНО: callback для установки SurfaceProvider ==========
     private var onPreviewCreated: ((Preview) -> Unit)? = null
-
     private var activeRecording: Recording? = null
 
     fun bindCamera(
         provider: ProcessCameraProvider,
-        onSetupPreview: (Preview) -> Unit, // ← НОВЫЙ ПАРАМЕТР: callback для настройки preview
+        onSetupPreview: (Preview) -> Unit,
         owner: LifecycleOwner
     ) {
         cameraProvider = provider
         lifecycleOwner = owner
-        onPreviewCreated = onSetupPreview // Сохраняем callback
+        onPreviewCreated = onSetupPreview
 
         createUseCases()
         rebindUseCases()
     }
 
     private fun createUseCases(forceDefault: Boolean = false) {
-        // Если форсим дефолт, то не указываем стратегию (CameraX сам выберет лучшее, обычно 4:3 для фото, 16:9 для видео)
         val resolutionSelector = if (forceDefault) {
             ResolutionSelector.Builder()
                 .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
@@ -114,16 +110,14 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             .setFlashMode(_uiState.value.flashMode)
             .build()
 
-        // Для видео Recorder тоже надо настроить аккуратно
         val recorderBuilder = Recorder.Builder()
             .setQualitySelector(
                 QualitySelector.fromOrderedList(
-                    listOf(Quality.FHD, Quality.HD, Quality.SD),
-                    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                    listOf(Quality.FHD, Quality.HD, Quality.SD, Quality.LOWEST), // <-- Добавил LOWEST
+                    FallbackStrategy.lowerQualityOrHigherThan(Quality.LOWEST) // <-- Разрешаем падать до самого дна
                 )
             )
 
-        // Устанавливаем AspectRatio только если НЕ форсим дефолт
         if (!forceDefault) {
             recorderBuilder.setAspectRatio(_uiState.value.aspectRatio)
         }
@@ -135,34 +129,47 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val provider = cameraProvider ?: return
         val owner = lifecycleOwner ?: return
 
-        // Функция для попытки привязки
         fun bind(useCustomAspectRatio: Boolean) {
             try {
+                // unbindAll НЕ останавливает запись, если используется asPersistentRecording()
                 provider.unbindAll()
 
                 val cameraSelector = CameraSelector.Builder()
                     .requireLensFacing(_uiState.value.lensFacing)
                     .build()
 
-                // Если это повторная попытка (useCustomAspectRatio = false),
-                // то пересоздаем UseCases без жестких требований к AspectRatio
                 if (!useCustomAspectRatio) {
                     createUseCases(forceDefault = true)
+                }
+
+                // ==============================================================
+                // 🔥 ШАГ 1: Динамический список UseCases
+                // На API 26 это спасет от зависания при переключении
+                // ==============================================================
+                val useCases = mutableListOf<UseCase>()
+
+                // 1. Превью нужно всегда
+                preview?.let { useCases.add(it) }
+
+                // 2. В режиме видео - только видео. В режиме фото - только фото.
+                // Это снижает нагрузку на шину данных и позволяет переключаться без краша.
+                if (_uiState.value.isVideoMode) {
+                    videoCapture?.let { useCases.add(it) }
+                } else {
+                    imageCapture?.let { useCases.add(it) }
                 }
 
                 camera = provider.bindToLifecycle(
                     owner,
                     cameraSelector,
-                    preview,
-                    imageCapture,
-                    videoCapture
+                    *useCases.toTypedArray()
                 )
 
                 _uiState.update {
                     it.copy(
                         cameraControl = camera?.cameraControl,
                         cameraInfo = camera?.cameraInfo,
-                        isCameraAvailable = true // Камера заработала
+                        isCameraAvailable = true
                     )
                 }
 
@@ -171,44 +178,40 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
             } catch (e: Exception) {
-                Log.e("CameraVM", "Binding failed with custom ratio: $useCustomAspectRatio", e)
+                Log.e("CameraVM", "Binding failed", e)
 
                 if (useCustomAspectRatio) {
-                    // ЕСЛИ УПАЛО С НАСТРОЙКАМИ ЮЗЕРА -> ПРОБУЕМ ДЕФОЛТНЫЕ
                     Log.w("CameraVM", "Retrying with default configuration...")
                     bind(useCustomAspectRatio = false)
                 } else {
-                    // Если упало даже с дефолтными -> все плохо
                     onCameraInitError(e)
                 }
             }
         }
 
-        // Запускаем первую попытку с текущими настройками
         bind(useCustomAspectRatio = true)
     }
 
     fun toggleCameraMode() {
+        // Если идет запись, режим (Фото<->Видео) менять нельзя.
+        // А вот камеру (Фронт<->Тыл) менять можно (см. switchCamera).
+        if (_uiState.value.isRecording) {
+            return
+        }
+
         val currentUiState = _uiState.value
         val newIsVideoMode = !currentUiState.isVideoMode
 
         if (newIsVideoMode) {
-            // Переключаемся НА ВИДЕО
-            // Если в памяти осталось, что фонарик был включен (isTorchOn == true),
-            // то включаем его обратно физически
             if (currentUiState.isTorchOn) {
                 camera?.cameraControl?.enableTorch(true)
             }
         } else {
-            // Переключаемся НА ФОТО
-            // Выключаем фонарик физически, чтобы он не горел на экране фото.
-            // ВАЖНО: Мы НЕ меняем state (isTorchOn остается true),
-            // чтобы запомнить выбор пользователя.
             camera?.cameraControl?.enableTorch(false)
         }
 
-        // Обновляем режим в UI
         _uiState.update { it.copy(isVideoMode = newIsVideoMode) }
+        rebindUseCases()
     }
 
     fun onCaptureClick() {
@@ -220,7 +223,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun takePhoto() {
-        val capture = imageCapture ?: return
+        val capture = imageCapture
+        // Если мы в режиме видео, imageCapture не привязан
+        if (capture == null) {
+            // Можно попробовать переключиться, но для безопасности просто игнорируем
+            // или логируем, так как кнопка в UI должна вызывать toggleVideoRecording
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(showFlashAnimation = true) }
@@ -228,22 +237,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(showFlashAnimation = false) }
         }
 
-        val name = "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())}"
-
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileCamera")
-            }
-        }
-
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(
-            context.contentResolver,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            contentValues
-        ).build()
+        val outputOptions = mediaManager.createPhotoOutputOptions()
 
         capture.takePicture(
             outputOptions,
@@ -252,13 +246,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val savedUri = output.savedUri ?: return
                     viewModelScope.launch {
-
-                        val thumbPath = MediaThumbnailGenerator.generateForPhoto(context, savedUri.toString())
-
+                        val thumbPath = ThumbnailGenerator.generateForPhoto(context, savedUri.toString())
                         repository.saveMedia(
                             path = savedUri.toString(),
                             type = MediaType.PHOTO,
-                            thumbnailPath = thumbPath // ✅ Передаем путь
+                            thumbnailPath = thumbPath
                         )
                         _events.send(CameraEvent.ShowToast("Фото сохранено"))
                     }
@@ -281,19 +273,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             activeRecording = null
             _uiState.update { it.copy(isRecording = false) }
         } else {
-            val name = "VID_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())}"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MobileCamera")
-                }
-            }
 
-            val outputOptions = MediaStoreOutputOptions.Builder(
-                context.contentResolver,
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-            ).setContentValues(contentValues).build()
+            val outputOptions = mediaManager.createVideoOutputOptions()
 
             _uiState.update { it.copy(recordingDuration = 0L) }
 
@@ -307,7 +288,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 .apply {
                     if (hasAudioPermission) withAudioEnabled()
                 }
-                .asPersistentRecording()
+                .asPersistentRecording() // 🔥 КЛЮЧЕВОЕ: Позволяет переключать камеру без остановки
                 .start(ContextCompat.getMainExecutor(context)) { event ->
                     when (event) {
                         is VideoRecordEvent.Start -> {
@@ -321,12 +302,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                             if (event.hasError()) {
                                 if (uri != android.net.Uri.EMPTY && duration > 0) {
                                     viewModelScope.launch {
-                                        val thumbPath = MediaThumbnailGenerator.generateForVideo(context, uri.toString())
+                                        val thumbPath = ThumbnailGenerator.generateForVideo(context, uri.toString())
                                         repository.saveMedia(
                                             path = uri.toString(),
                                             type = MediaType.VIDEO,
                                             duration = duration,
-                                            thumbnailPath = thumbPath // ✅ Передаем путь
+                                            thumbnailPath = thumbPath
                                         )
                                         _events.send(CameraEvent.ShowToast("Видео сохранено"))
                                     }
@@ -337,12 +318,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                                 }
                             } else {
                                 viewModelScope.launch {
-                                    val thumbPath = MediaThumbnailGenerator.generateForVideo(context, uri.toString())
+                                    val thumbPath = ThumbnailGenerator.generateForVideo(context, uri.toString())
                                     repository.saveMedia(
                                         path = uri.toString(),
                                         type = MediaType.VIDEO,
                                         duration = duration,
-                                        thumbnailPath = thumbPath // ✅ Передаем путь
+                                        thumbnailPath = thumbPath
                                     )
                                     _events.send(CameraEvent.ShowToast("Видео сохранено"))
                                 }
@@ -367,6 +348,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun switchCamera() {
+        // ✅ УБРАНА БЛОКИРОВКА ПРИ ЗАПИСИ
+        // Благодаря asPersistentRecording() и разделению UseCase в rebindUseCases(),
+        // переключение будет безопасным даже на API 26.
+
         val newLens = if (_uiState.value.lensFacing == CameraSelector.LENS_FACING_BACK) {
             CameraSelector.LENS_FACING_FRONT
         } else {
@@ -430,6 +415,30 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _events.send(CameraEvent.ShowToast("Ошибка инициализации камеры: ${e.message}"))
         }
+    }
+
+    fun onTapToFocus(meteringPoint: MeteringPoint) {
+        val cameraControl = _uiState.value.cameraControl ?: return
+
+        val action = FocusMeteringAction.Builder(meteringPoint)
+            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        cameraControl.startFocusAndMetering(action)
+    }
+
+    fun onZoomEvent(scaleFactor: Float) {
+        val cameraControl = _uiState.value.cameraControl ?: return
+        val cameraInfo = _uiState.value.cameraInfo ?: return
+
+        val currentZoom = cameraInfo.zoomState.value?.zoomRatio ?: 1f
+        val maxZoom = cameraInfo.zoomState.value?.maxZoomRatio ?: 10f
+        val minZoom = cameraInfo.zoomState.value?.minZoomRatio ?: 1f
+
+        // scaleFactor > 1 (увеличение), < 1 (уменьшение)
+        val newZoom = (currentZoom * scaleFactor).coerceIn(minZoom, maxZoom)
+
+        cameraControl.setZoomRatio(newZoom)
     }
 }
 

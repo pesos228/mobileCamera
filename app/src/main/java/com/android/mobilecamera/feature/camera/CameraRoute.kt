@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.mobilecamera.feature.camera.ui.CameraScreenContent
+import com.android.mobilecamera.infrastructure.permissions.PermissionManager
 
 @Composable
 fun CameraRoute(
@@ -20,9 +21,10 @@ fun CameraRoute(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val permissionManager = remember { PermissionManager(context) }
     val uiState by viewModel.uiState.collectAsState()
 
-    var hasPermission by remember { mutableStateOf(context.hasCameraAccess()) }
+    var hasPermission by remember { mutableStateOf(permissionManager.hasAllPermissions()) }
     var showRationaleDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -47,18 +49,22 @@ fun CameraRoute(
 
     fun checkAndRequestPermissions() {
         if (activity == null) return
-        val shouldShowRationale = requiredCameraPermissions.any {
+
+        val requiredPermissions = permissionManager.getRequiredPermissions()
+
+        val shouldShowRationale = requiredPermissions.any {
             ActivityCompat.shouldShowRequestPermissionRationale(activity, it)
         }
+
         if (shouldShowRationale) {
             showRationaleDialog = true
         } else {
-            permissionLauncher.launch(requiredCameraPermissions)
+            permissionLauncher.launch(requiredPermissions)
         }
     }
 
     LaunchedEffect(Unit) {
-        if (!context.hasCameraAccess()) {
+        if (!permissionManager.hasAllPermissions()) {
             checkAndRequestPermissions()
         }
     }
@@ -71,7 +77,7 @@ fun CameraRoute(
         onRationaleDismiss = { showRationaleDialog = false },
         onRationaleConfirm = {
             showRationaleDialog = false
-            permissionLauncher.launch(requiredCameraPermissions)
+            permissionLauncher.launch(permissionManager.getRequiredPermissions())
         },
         onCapture = { viewModel.onCaptureClick() },
         onSwitchMode = { viewModel.toggleCameraMode() },
@@ -89,6 +95,8 @@ fun CameraRoute(
             )
         },
         onNavigateToGallery = onNavigateToGallery,
-        onCameraInitError = {viewModel.onCameraInitError(it)}
+        onCameraInitError = {viewModel.onCameraInitError(it)},
+        onTapToFocus = { point -> viewModel.onTapToFocus(point) },
+        onZoomChange = { factor -> viewModel.onZoomEvent(factor) }
     )
 }

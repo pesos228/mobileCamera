@@ -6,8 +6,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
-val requiredCameraPermissions: Array<String>
-    get() {
+class PermissionManager(private val context: Context) {
+
+    fun getRequiredPermissions(): Array<String> {
         val permissions = mutableListOf(
             Manifest.permission.CAMERA,
             Manifest.permission.RECORD_AUDIO
@@ -24,19 +25,25 @@ val requiredCameraPermissions: Array<String>
             permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
             permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
         }
-        // Старые версии (Android 9-12)
+        // Android 10-12 (API 29-32) - Scoped Storage, но READ нужен для своей галереи (если не через picker)
         else {
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            // WRITE нужен только для совсем древних (Android 9 и ниже)
+
+            // Android 9 и ниже (API <= 28) - нужен WRITE для сохранения
             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
                 permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
+
         return permissions.toTypedArray()
     }
 
-fun Context.hasCameraAccess(): Boolean {
-    return requiredCameraPermissions.all { permission ->
-        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+    fun hasAllPermissions(): Boolean {
+        return getRequiredPermissions().all { permission ->
+            ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) == PackageManager.PERMISSION_GRANTED
+        }
     }
 }

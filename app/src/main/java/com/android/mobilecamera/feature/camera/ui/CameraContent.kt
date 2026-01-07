@@ -3,10 +3,8 @@ package com.android.mobilecamera.feature.camera.ui
 import android.annotation.SuppressLint
 import androidx.camera.core.*
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -27,6 +24,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.android.mobilecamera.feature.camera.CameraUiState
+import com.android.mobilecamera.feature.camera.ui.components.AspectRatioButton
+import com.android.mobilecamera.feature.camera.ui.components.CaptureButton
+import com.android.mobilecamera.feature.camera.ui.components.ModeButton
 
 @Composable
 fun CameraScreenContent(
@@ -35,7 +35,7 @@ fun CameraScreenContent(
     onSwitchMode: () -> Unit,
     onSwitchCamera: () -> Unit,
     onToggleFlash: () -> Unit,
-    onAspectRatioChange: (Int) -> Unit, // ← ДОБАВИЛИ
+    onAspectRatioChange: (Int) -> Unit,
     onControllerCreated: (
         provider: androidx.camera.lifecycle.ProcessCameraProvider,
         previewView: androidx.camera.view.PreviewView,
@@ -48,6 +48,8 @@ fun CameraScreenContent(
     onRationaleDismiss: () -> Unit,
     onRationaleConfirm: () -> Unit,
     onCameraInitError: (Exception) -> Unit,
+    onTapToFocus: (MeteringPoint) -> Unit,
+    onZoomChange: (Float) -> Unit,
 ) {
     if (showRationaleDialog) {
         AlertDialog(
@@ -111,40 +113,35 @@ fun CameraScreenContent(
         AndroidView(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(uiState.cameraControl) {
-                    detectTapGestures { offset ->
-                        val cameraControl = uiState.cameraControl ?: return@detectTapGestures
-
-                        val factory = SurfaceOrientedMeteringPointFactory(
-                            size.width.toFloat(),
-                            size.height.toFloat()
-                        )
-                        val point = factory.createPoint(offset.x, offset.y)
-
-                        val action = FocusMeteringAction.Builder(point)
-                            .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
-                            .build()
-
-                        cameraControl.startFocusAndMetering(action)
-                        focusPoint = offset
-                    }
-                }
-                .pointerInput(uiState.cameraControl, uiState.cameraInfo) {
+                .pointerInput(Unit) {
                     detectTransformGestures { _, _, zoom, _ ->
-                        val cameraControl = uiState.cameraControl ?: return@detectTransformGestures
-                        val cameraInfo = uiState.cameraInfo ?: return@detectTransformGestures
-
-                        val currentZoom = cameraInfo.zoomState.value?.zoomRatio ?: 1f
-                        val maxZoom = cameraInfo.zoomState.value?.maxZoomRatio ?: 10f
-                        val minZoom = cameraInfo.zoomState.value?.minZoomRatio ?: 1f
-
-                        val newZoom = (currentZoom * zoom).coerceIn(minZoom, maxZoom)
-                        cameraControl.setZoomRatio(newZoom)
+                        onZoomChange(zoom)
                     }
                 },
             factory = { ctx ->
                 val previewView = androidx.camera.view.PreviewView(ctx).apply {
+                    // FIT_CENTER: Картинка целиком, возможны черные полосы. НЕ РАСТЯНУТА.
                     scaleType = androidx.camera.view.PreviewView.ScaleType.FIT_CENTER
+
+                    // 2. Ловим нажатие (Tap) на уровне Android View
+                    setOnTouchListener { view, event ->
+                        if (event.action == android.view.MotionEvent.ACTION_UP) {
+                            val v = view as androidx.camera.view.PreviewView
+
+                            // МАГИЯ: Фабрика сама учитывает FIT_CENTER и черные полосы
+                            val factory = v.meteringPointFactory
+                            val point = factory.createPoint(event.x, event.y)
+
+                            // Вызываем колбэк, который уйдет во ViewModel
+                            onTapToFocus(point)
+
+                            // Сохраняем координату просто чтобы нарисовать кружок на экране
+                            focusPoint = Offset(event.x, event.y)
+
+                            view.performClick()
+                        }
+                        return@setOnTouchListener true
+                    }
                 }
                 val cameraProviderFuture = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(ctx)
                 cameraProviderFuture.addListener({
@@ -339,93 +336,6 @@ fun CameraScreenContent(
     }
 }
 
-// ========== НОВЫЙ КОМПОНЕНТ ==========
-@Composable
-fun AspectRatioButton(
-    text: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val containerColor = if (isSelected) Color.Yellow else Color.Transparent
-    val contentColor = if (isSelected) Color.Black else Color.White
-
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.height(32.dp)
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall
-        )
-    }
-}
-
-@Composable
-fun CaptureButton(
-    isRecording: Boolean,
-    isVideoMode: Boolean,
-    onClick: () -> Unit
-) {
-    val color by animateColorAsState(
-        if (isVideoMode) Color.Red else Color.White,
-        label = "color"
-    )
-    val outerScale by animateFloatAsState(
-        if (isRecording) 1.2f else 1f,
-        label = "scale"
-    )
-    val innerShape = if (isRecording) MaterialTheme.shapes.small else CircleShape
-    val innerSize = if (isRecording) 30.dp else 60.dp
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.scale(outerScale)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .border(4.dp, Color.White, CircleShape)
-        )
-        Button(
-            onClick = onClick,
-            shape = innerShape,
-            colors = ButtonDefaults.buttonColors(containerColor = color),
-            modifier = Modifier.size(innerSize),
-            contentPadding = PaddingValues(0.dp)
-        ) {}
-    }
-}
-
-@Composable
-fun ModeButton(
-    text: String,
-    isSelected: Boolean,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
-) {
-    val containerColor = if (isSelected) Color.Black.copy(alpha = 0.5f) else Color.Transparent
-    val contentColor = if (isSelected) Color.Yellow else Color.White
-
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        ),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        shape = CircleShape
-    ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.labelLarge)
-    }
-}
 
 @SuppressLint("DefaultLocale")
 private fun formatDuration(millis: Long): String {
