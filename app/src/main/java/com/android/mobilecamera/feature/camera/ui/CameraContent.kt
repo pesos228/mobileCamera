@@ -2,7 +2,6 @@ package com.android.mobilecamera.feature.camera.ui
 
 import android.annotation.SuppressLint
 import androidx.camera.core.*
-import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -24,9 +23,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.android.mobilecamera.feature.camera.CameraUiState
 import com.android.mobilecamera.feature.camera.ui.components.AspectRatioButton
 import com.android.mobilecamera.feature.camera.ui.components.CaptureButton
@@ -40,18 +36,13 @@ fun CameraScreenContent(
     onSwitchCamera: () -> Unit,
     onToggleFlash: () -> Unit,
     onAspectRatioChange: (Int) -> Unit,
-    onControllerCreated: (
-        provider: ProcessCameraProvider,
-        previewView: PreviewView,
-        lifecycleOwner: LifecycleOwner
-    ) -> Unit,
+    onBindCamera: (Preview.SurfaceProvider) -> Unit,
     hasPermission: Boolean,
     onPermissionRequest: () -> Unit,
     onNavigateToGallery: () -> Unit,
     showRationaleDialog: Boolean,
     onRationaleDismiss: () -> Unit,
     onRationaleConfirm: () -> Unit,
-    onCameraInitError: (Exception) -> Unit,
     onTapToFocus: (MeteringPoint) -> Unit,
     onZoomChange: (Float) -> Unit,
 ) {
@@ -79,11 +70,22 @@ fun CameraScreenContent(
         return
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current
     var focusPoint by remember { mutableStateOf<Offset?>(null) }
-
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
+    var surfaceProvider by remember { mutableStateOf<Preview.SurfaceProvider?>(null) }
+
+    // Реактивный биндинг камеры при изменении параметров
+    LaunchedEffect(
+        surfaceProvider,
+        uiState.isVideoMode,
+        uiState.lensFacing,
+        uiState.aspectRatio
+    ) {
+        surfaceProvider?.let { provider ->
+            onBindCamera(provider)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -108,22 +110,11 @@ fun CameraScreenContent(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                val view = PreviewView(ctx).apply {
+                PreviewView(ctx).apply {
                     scaleType = PreviewView.ScaleType.FIT_CENTER
+                    previewViewRef = this
+                    surfaceProvider = this.surfaceProvider
                 }
-                previewViewRef = view
-
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                cameraProviderFuture.addListener({
-                    try {
-                        val cameraProvider = cameraProviderFuture.get()
-                        onControllerCreated(cameraProvider, view, lifecycleOwner)
-                    } catch (e: Exception) {
-                        onCameraInitError(e)
-                    }
-                }, ContextCompat.getMainExecutor(ctx))
-
-                view
             }
         )
 

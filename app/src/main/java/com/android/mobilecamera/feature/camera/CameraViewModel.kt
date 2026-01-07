@@ -57,8 +57,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private val _events = Channel<CameraEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
 
-    private var lifecycleOwner: LifecycleOwner? = null
-
     init {
         viewModelScope.launch {
             cameraManager.torchState.collect { isTorchOn ->
@@ -68,8 +66,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun bindCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
-        this.lifecycleOwner = lifecycleOwner
-        cameraManager.startCamera(
+        cameraManager.bindCameraUseCases(
             lifecycleOwner = lifecycleOwner,
             surfaceProvider = surfaceProvider,
             isVideoMode = _uiState.value.isVideoMode,
@@ -129,18 +126,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         if (_uiState.value.isRecording) return
         val newMode = !_uiState.value.isVideoMode
         _uiState.update { it.copy(isVideoMode = newMode) }
-        lifecycleOwner?.let { owner ->
-            cameraManager.bindCameraUseCases(owner, newMode) { _, _ -> }
-        }
     }
 
     fun switchCamera() {
         val newLens = cameraManager.toggleCameraLens()
         _uiState.update { it.copy(lensFacing = newLens) }
-
-        lifecycleOwner?.let { owner ->
-            cameraManager.bindCameraUseCases(owner, _uiState.value.isVideoMode) { _, _ -> }
-        }
     }
 
     fun setAspectRatio(ratio: Int) {
@@ -150,9 +140,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
         cameraManager.setAspectRatio(ratio)
         _uiState.update { it.copy(aspectRatio = ratio) }
-        lifecycleOwner?.let { owner ->
-            cameraManager.bindCameraUseCases(owner, _uiState.value.isVideoMode) { _, _ -> }
-        }
     }
 
     fun toggleFlash() {
@@ -191,7 +178,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         cameraManager.cleanup()
-        lifecycleOwner = null
     }
 
     fun onCameraInitError(e: Exception) {

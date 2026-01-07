@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.mobilecamera.feature.camera.ui.CameraScreenContent
 import com.android.mobilecamera.infrastructure.permissions.PermissionManager
@@ -21,6 +22,7 @@ fun CameraRoute(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
     val permissionManager = remember { PermissionManager(context) }
     val uiState by viewModel.uiState.collectAsState()
 
@@ -84,17 +86,11 @@ fun CameraRoute(
         onSwitchCamera = { viewModel.switchCamera() },
         onToggleFlash = { viewModel.toggleFlash() },
         onAspectRatioChange = { viewModel.setAspectRatio(it) },
-        onControllerCreated = { _, previewView, owner ->
-            viewModel.bindCamera(
-                lifecycleOwner = owner,
-                surfaceProvider = previewView.surfaceProvider
-            )
-        },
-        onCameraInitError = { e ->
-            viewModel.onCameraInitError(e)
-        },
         onNavigateToGallery = onNavigateToGallery,
         onTapToFocus = { point -> viewModel.onTapToFocus(point) },
-        onZoomChange = { factor -> viewModel.onZoomEvent(factor) }
+        onZoomChange = { zoom -> viewModel.onZoomEvent(zoom) },
+        onBindCamera = { surfaceProvider ->
+            viewModel.bindCamera(lifecycleOwner, surfaceProvider)
+        },
     )
 }

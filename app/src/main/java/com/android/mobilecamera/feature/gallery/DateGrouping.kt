@@ -38,7 +38,7 @@ fun List<MediaEntity>.groupByDate(): List<MediaGroup> {
                 timestamp >= today -> "Сегодня"
                 timestamp >= yesterday -> "Вчера"
                 else -> {
-                    val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale("ru"))
+                    val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.forLanguageTag("ru"))
                     dateFormat.format(Date(timestamp))
                 }
             }

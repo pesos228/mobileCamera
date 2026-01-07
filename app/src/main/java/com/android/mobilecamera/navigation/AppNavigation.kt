@@ -45,7 +45,7 @@ fun AppNavigation() {
             arguments = listOf(navArgument("mediaId") { type = NavType.IntType })
         ) { backStackEntry ->
             val mediaId = backStackEntry.arguments?.getInt("mediaId") ?: 0
-            MediaViewerRoute(mediaId = mediaId, onNavigateBack = {navController.popBackStack()})
+            MediaViewerRoute(mediaId = mediaId)
         }
     }
 }

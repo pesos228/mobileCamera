@@ -18,7 +18,6 @@ import com.android.mobilecamera.feature.viewer.ui.components.VideoPlayer
 @Composable
 fun MediaViewerContent(
     uiState: ViewerUiState,
-    onNavigateBack: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier

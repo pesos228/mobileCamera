@@ -1,4 +1,4 @@
-package com.android.mobilecamera.feature.gallery.ui
+package com.android.mobilecamera.feature.gallery.ui.components
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap

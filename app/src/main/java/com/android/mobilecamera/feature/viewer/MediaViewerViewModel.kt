@@ -45,6 +45,7 @@ class MediaViewerViewModel(
     }
 }
 
+@Suppress("UNCHECKED_CAST")
 class MediaViewerViewModelFactory(
     private val application: Application,
     private val mediaId: Int

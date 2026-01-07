@@ -10,6 +10,7 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import com.android.mobilecamera.infrastructure.media.MediaManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,6 @@ class CameraManager(
     private var preview: Preview? = null
     private var recorder: Recorder? = null
 
-    private var currentSurfaceProvider: Preview.SurfaceProvider? = null
     private var activeRecording: Recording? = null
     private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
 
@@ -45,34 +45,44 @@ class CameraManager(
 
     private val _zoomState = MutableStateFlow(1f)
 
-    fun startCamera(
+    fun bindCameraUseCases(
         lifecycleOwner: LifecycleOwner,
         surfaceProvider: Preview.SurfaceProvider,
         isVideoMode: Boolean,
         onCameraInitialized: (CameraControl, CameraInfo) -> Unit,
         onError: (Exception) -> Unit
     ) {
-        this.currentSurfaceProvider = surfaceProvider
+        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+            Log.w("CameraManager", "LifecycleOwner is DESTROYED, skipping camera binding")
+            return
+        }
+
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
 
         cameraProviderFuture.addListener({
             try {
-                cameraProvider = cameraProviderFuture.get()
-                bindCameraUseCases(lifecycleOwner, isVideoMode, onCameraInitialized)
+                val provider = cameraProviderFuture.get()
+                cameraProvider = provider
+
+                if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                    Log.w("CameraManager", "LifecycleOwner became DESTROYED, aborting camera binding")
+                    return@addListener
+                }
+
+                bindCamera(provider, lifecycleOwner, surfaceProvider, isVideoMode, onCameraInitialized)
             } catch (e: Exception) {
                 onError(e)
             }
         }, mainExecutor)
     }
 
-    fun bindCameraUseCases(
+    private fun bindCamera(
+        provider: ProcessCameraProvider,
         lifecycleOwner: LifecycleOwner,
+        surfaceProvider: Preview.SurfaceProvider,
         isVideoMode: Boolean,
         onCameraInitialized: (CameraControl, CameraInfo) -> Unit
     ) {
-        val provider = cameraProvider ?: return
-        val surfaceProvider = currentSurfaceProvider ?: return
-
         try {
             provider.unbindAll()
 

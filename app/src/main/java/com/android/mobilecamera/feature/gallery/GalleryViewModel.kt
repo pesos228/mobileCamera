@@ -100,6 +100,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 }
 
+@Suppress("UNCHECKED_CAST")
 class GalleryViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return GalleryViewModel(application) as T

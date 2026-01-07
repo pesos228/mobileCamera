@@ -11,7 +11,6 @@ import com.android.mobilecamera.feature.viewer.ui.MediaViewerContent
 @Composable
 fun MediaViewerRoute(
     mediaId: Int,
-    onNavigateBack: () -> Unit = {},
     viewModel: MediaViewerViewModel = viewModel(
         factory = MediaViewerViewModelFactory(
             LocalContext.current.applicationContext as Application,
@@ -23,6 +22,5 @@ fun MediaViewerRoute(
 
     MediaViewerContent(
         uiState = uiState,
-        onNavigateBack = onNavigateBack
     )
 }
