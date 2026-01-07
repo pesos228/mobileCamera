@@ -84,18 +84,16 @@ fun CameraRoute(
         onSwitchCamera = { viewModel.switchCamera() },
         onToggleFlash = { viewModel.toggleFlash() },
         onAspectRatioChange = { viewModel.setAspectRatio(it) },
-        onControllerCreated = { provider, previewView, owner ->
-            // ========== ПЕРЕДАЕМ CALLBACK ==========
+        onControllerCreated = { _, previewView, owner ->
             viewModel.bindCamera(
-                provider = provider,
-                onSetupPreview = { preview ->
-                    preview.surfaceProvider = previewView.surfaceProvider
-                },
-                owner = owner
+                lifecycleOwner = owner,
+                surfaceProvider = previewView.surfaceProvider
             )
         },
+        onCameraInitError = { e ->
+            viewModel.onCameraInitError(e)
+        },
         onNavigateToGallery = onNavigateToGallery,
-        onCameraInitError = {viewModel.onCameraInitError(it)},
         onTapToFocus = { point -> viewModel.onTapToFocus(point) },
         onZoomChange = { factor -> viewModel.onZoomEvent(factor) }
     )
