@@ -1,4 +1,4 @@
-package com.android.mobilecamera.feature.camera
+package com.android.mobilecamera.infrastructure.permissions
 
 import android.Manifest
 import android.content.Context
