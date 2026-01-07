@@ -26,6 +26,7 @@ class CameraManager(
     private val context: Context,
     private val mediaManager: MediaManager
 ) {
+    private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
     private var imageCapture: ImageCapture? = null
@@ -34,7 +35,9 @@ class CameraManager(
     private var recorder: Recorder? = null
 
     private var activeRecording: Recording? = null
-    private val mainExecutor: Executor = ContextCompat.getMainExecutor(context)
+    @Volatile
+    private var isStoppingRecording = false
+    private val recordingLock = Any()
 
     private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
     private var aspectRatio: Int = AspectRatio.RATIO_4_3
@@ -53,7 +56,7 @@ class CameraManager(
         onError: (Exception) -> Unit
     ) {
         if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
-            Log.w("CameraManager", "LifecycleOwner is DESTROYED, skipping camera binding")
+            Log.w("CameraManager", "LifecycleOwner is DESTROYED, skipping")
             return
         }
 
@@ -65,12 +68,14 @@ class CameraManager(
                 cameraProvider = provider
 
                 if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
-                    Log.w("CameraManager", "LifecycleOwner became DESTROYED, aborting camera binding")
+                    Log.w("CameraManager", "LifecycleOwner became DESTROYED, aborting")
                     return@addListener
                 }
 
                 bindCamera(provider, lifecycleOwner, surfaceProvider, isVideoMode, onCameraInitialized)
+
             } catch (e: Exception) {
+                Log.e("CameraManager", "Camera binding failed", e)
                 onError(e)
             }
         }, mainExecutor)
@@ -99,7 +104,9 @@ class CameraManager(
             preview = Preview.Builder()
                 .setResolutionSelector(resolutionSelector)
                 .build()
-                .apply { setSurfaceProvider(surfaceProvider) }
+                .apply {
+                    setSurfaceProvider(surfaceProvider)
+                }
 
             val useCases = mutableListOf<UseCase>(preview!!)
 
@@ -147,7 +154,8 @@ class CameraManager(
             }
 
         } catch (e: Exception) {
-            Log.e("CameraManager", "Binding failed", e)
+            Log.e("CameraManager", "Binding to lifecycle failed", e)
+            throw e
         }
     }
 
@@ -225,33 +233,82 @@ class CameraManager(
         onVideoSaved: (Uri, Long) -> Unit,
         onError: (String) -> Unit
     ): Recording? {
-        val capture = videoCapture ?: return null
-        val outputOptions = mediaManager.createVideoOutputOptions()
-        activeRecording = capture.output
-            .prepareRecording(context, outputOptions)
-            .apply { if (withAudio) withAudioEnabled() }
-            .asPersistentRecording()
-            .start(mainExecutor) { event ->
-                when (event) {
-                    is VideoRecordEvent.Finalize -> {
-                        val uri = event.outputResults.outputUri
-                        val duration = event.recordingStats.recordedDurationNanos / 1_000_000
-                        if (!event.hasError()) {
-                            onVideoSaved(uri, duration)
-                        } else {
-                            if (uri != Uri.EMPTY && duration > 0) onVideoSaved(uri, duration)
-                            else onError("Video capture failed: ${event.error}")
+        synchronized(recordingLock) {
+            if (isStoppingRecording) {
+                onError("Предыдущая запись еще останавливается, подождите...")
+                return null
+            }
+
+            val capture = videoCapture ?: return null
+            val outputOptions = mediaManager.createVideoOutputOptions()
+
+            isStoppingRecording = false
+
+            activeRecording = capture.output
+                .prepareRecording(context, outputOptions)
+                .apply { if (withAudio) withAudioEnabled() }
+                .asPersistentRecording()
+                .start(mainExecutor) { event ->
+                    when (event) {
+                        is VideoRecordEvent.Finalize -> {
+                            handleRecordingFinalize(event, onVideoSaved, onError)
                         }
-                        activeRecording = null
                     }
                 }
-            }
-        return activeRecording
+            return activeRecording
+        }
     }
 
-    fun stopVideoRecording() {
-        activeRecording?.stop()
-        activeRecording = null
+    private fun handleRecordingFinalize(
+        event: VideoRecordEvent.Finalize,
+        onVideoSaved: (Uri, Long) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        synchronized(recordingLock) {
+            isStoppingRecording = false
+
+            val uri = event.outputResults.outputUri
+            val duration = event.recordingStats.recordedDurationNanos / 1_000_000
+
+            if (!event.hasError()) {
+                onVideoSaved(uri, duration)
+            } else {
+                if (uri != Uri.EMPTY && duration > 0) {
+                    onVideoSaved(uri, duration)
+                } else {
+                    onError("Video capture failed: ${event.error}")
+                }
+            }
+        }
+    }
+
+    fun stopVideoRecording(): Boolean {
+        synchronized(recordingLock) {
+            val recording = activeRecording
+            if (recording == null) {
+                Log.w("CameraManager", "stopVideoRecording: no active recording")
+                return false
+            }
+
+            if (isStoppingRecording) {
+                Log.w("CameraManager", "stopVideoRecording: already stopping")
+                return false
+            }
+
+            isStoppingRecording = true
+
+            activeRecording = null
+
+            try {
+                recording.stop()
+                Log.d("CameraManager", "Recording stop initiated")
+                return true
+            } catch (e: Exception) {
+                Log.e("CameraManager", "Error stopping recording", e)
+                isStoppingRecording = false
+                return false
+            }
+        }
     }
 
     fun setAspectRatio(ratio: Int) {
@@ -265,8 +322,21 @@ class CameraManager(
     }
 
     fun cleanup() {
+        synchronized(recordingLock) {
+            if (activeRecording != null && !isStoppingRecording) {
+                stopVideoRecording()
+            }
+            activeRecording = null
+            isStoppingRecording = false
+        }
+
         cameraProvider?.unbindAll()
-        activeRecording?.stop()
+        cameraProvider = null
+
+        camera = null
+        preview = null
+        imageCapture = null
+        videoCapture = null
         recorder = null
         _torchState.value = false
     }

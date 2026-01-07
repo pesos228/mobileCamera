@@ -19,6 +19,7 @@ import com.android.mobilecamera.infrastructure.camera.CameraManager
 import com.android.mobilecamera.infrastructure.media.MediaManager
 import com.android.mobilecamera.infrastructure.media.ThumbnailGenerator
 import com.android.mobilecamera.infrastructure.permissions.PermissionManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class CameraUiState(
     val isVideoMode: Boolean = false,
@@ -86,10 +88,13 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(showFlashAnimation = true) }
             delay(100)
             _uiState.update { it.copy(showFlashAnimation = false) }
+
             try {
                 val uri = cameraManager.takePhoto()
-                val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
-                repository.saveMedia(uri.toString(), MediaType.PHOTO, thumbnailPath = thumb)
+                withContext(Dispatchers.IO) {
+                    val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
+                    repository.saveMedia(uri.toString(), MediaType.PHOTO, thumbnailPath = thumb)
+                }
                 sendToast("Фото сохранено")
             } catch (e: Exception) {
                 sendToast("Ошибка фото: ${e.message}")
@@ -104,17 +109,21 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             val hasAudio = permissionManager.hasAllPermissions()
             _uiState.update { it.copy(recordingDuration = 0L) }
+
             val recording = cameraManager.startVideoRecording(
                 withAudio = hasAudio,
                 onVideoSaved = { uri, duration ->
                     viewModelScope.launch {
-                        val thumb = ThumbnailGenerator.generateForVideo(context, uri.toString())
-                        repository.saveMedia(uri.toString(), MediaType.VIDEO, duration, thumbnailPath = thumb)
+                        withContext(Dispatchers.IO) {
+                            val thumb = ThumbnailGenerator.generateForVideo(context, uri.toString())
+                            repository.saveMedia(uri.toString(), MediaType.VIDEO, duration, thumbnailPath = thumb)
+                        }
                         sendToast("Видео сохранено")
                     }
                 },
                 onError = { msg -> sendToast(msg) }
             )
+
             if (recording != null) {
                 _uiState.update { it.copy(isRecording = true) }
                 startTimer()
@@ -164,9 +173,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun startTimer() {
         viewModelScope.launch {
+            val startTime = System.currentTimeMillis()
             while (_uiState.value.isRecording) {
-                delay(1000)
-                _uiState.update { it.copy(recordingDuration = it.recordingDuration + 1000) }
+                delay(100)
+                val elapsed = System.currentTimeMillis() - startTime
+                _uiState.update { it.copy(recordingDuration = elapsed) }
             }
         }
     }
