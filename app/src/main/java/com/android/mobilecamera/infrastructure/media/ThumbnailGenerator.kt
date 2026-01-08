@@ -44,7 +44,6 @@ object ThumbnailGenerator {
             try {
                 val uri = photoUri.toUri()
 
-                // Читаем размеры
                 val options = BitmapFactory.Options().apply {
                     inJustDecodeBounds = true
                 }
@@ -52,7 +51,6 @@ object ThumbnailGenerator {
                     BitmapFactory.decodeStream(it, null, options)
                 }
 
-                // Уменьшаем
                 options.inSampleSize = calculateInSampleSize(options)
                 options.inJustDecodeBounds = false
 
@@ -60,7 +58,6 @@ object ThumbnailGenerator {
                     BitmapFactory.decodeStream(it, null, options)
                 } ?: return@withContext null
 
-                // Исправляем ориентацию по EXIF
                 val rotatedBitmap = fixOrientation(context, uri, bitmap)
 
                 saveBitmapToCache(context, rotatedBitmap, "img_thumb")
@@ -124,7 +121,6 @@ object ThumbnailGenerator {
         }
     }
 
-    // Упрощенная версия - всегда THUMBNAIL_SIZE
     private fun calculateInSampleSize(options: BitmapFactory.Options): Int {
         val (height, width) = options.outHeight to options.outWidth
         var inSampleSize = 1

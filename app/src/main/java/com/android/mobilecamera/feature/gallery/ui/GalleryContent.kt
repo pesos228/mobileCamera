@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ import com.android.mobilecamera.feature.gallery.GalleryUiState
 import com.android.mobilecamera.feature.gallery.groupByDate
 import com.android.mobilecamera.feature.gallery.ui.components.MediaItemWithSelection
 import com.android.mobilecamera.feature.gallery.ui.components.SelectionTopBar
+import com.android.mobilecamera.feature.gallery.ui.components.SyncProgressDialog
 
 @Composable
 fun GalleryContent(
@@ -32,8 +34,16 @@ fun GalleryContent(
     onClearClick: () -> Unit,
     onAddMockClick: () -> Unit,
     onDeleteSelected: () -> Unit,
-    onClearSelection: () -> Unit
+    onClearSelection: () -> Unit,
 ) {
+    if (uiState.isSyncing) {
+        val (current, total) = uiState.syncProgress ?: (0 to 0)
+        SyncProgressDialog(
+            current = current,
+            total = total
+        )
+    }
+
     BackHandler(enabled = uiState.isSelectionMode) {
         onClearSelection()
     }
@@ -63,7 +73,7 @@ fun GalleryContent(
             groupedMedia.forEach { group ->
                 item(
                     key = "header_${group.date}",
-                    span = { androidx.compose.foundation.lazy.grid.GridItemSpan(3) }
+                    span = { GridItemSpan(3) }
                 ) {
                     Text(
                         text = group.date,
@@ -98,7 +108,7 @@ fun GalleryContent(
             }
         }
 
-        if (uiState.mediaList.isEmpty()) {
+        if (uiState.mediaList.isEmpty() && !uiState.isSyncing) {
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -111,7 +121,7 @@ fun GalleryContent(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Нажмите + для создания тестовых данных",
+                    text = "Нажмите + для тестов\nили кнопку ↻ для поиска файлов",
                     color = Color.White.copy(alpha = 0.4f),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center

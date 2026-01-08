@@ -196,8 +196,12 @@ fun CameraScreenContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                IconButton(onClick = onNavigateToGallery, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = Color.White, modifier = Modifier.fillMaxSize())
+                if (!uiState.isRecording) {
+                    IconButton(onClick = onNavigateToGallery, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = Color.White, modifier = Modifier.fillMaxSize())
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
                 }
                 CaptureButton(isRecording = uiState.isRecording, isVideoMode = uiState.isVideoMode, onClick = onCapture)
                 IconButton(onClick = onSwitchCamera, modifier = Modifier.size(48.dp)) {

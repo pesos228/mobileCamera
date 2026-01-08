@@ -19,7 +19,6 @@ import com.android.mobilecamera.infrastructure.camera.CameraManager
 import com.android.mobilecamera.infrastructure.media.MediaManager
 import com.android.mobilecamera.infrastructure.media.ThumbnailGenerator
 import com.android.mobilecamera.infrastructure.permissions.PermissionManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 data class CameraUiState(
     val isVideoMode: Boolean = false,
@@ -48,8 +46,8 @@ sealed class CameraEvent {
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context: Context get() = getApplication()
-    private val repository = MediaRepository(AppDatabase.getDatabase(context).mediaDao())
     private val mediaManager = MediaManager(context)
+    private val repository = MediaRepository(AppDatabase.getDatabase(context).mediaDao(), mediaManager)
     private val permissionManager = PermissionManager(context)
     private val cameraManager = CameraManager(context, mediaManager)
 
@@ -91,10 +89,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
             try {
                 val uri = cameraManager.takePhoto()
-                withContext(Dispatchers.IO) {
-                    val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
-                    repository.saveMedia(uri.toString(), MediaType.PHOTO, thumbnailPath = thumb)
-                }
+                val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
+                repository.saveMedia(uri.toString(), MediaType.PHOTO, thumbnailPath = thumb)
                 sendToast("Фото сохранено")
             } catch (e: Exception) {
                 sendToast("Ошибка фото: ${e.message}")
@@ -114,10 +110,8 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 withAudio = hasAudio,
                 onVideoSaved = { uri, duration ->
                     viewModelScope.launch {
-                        withContext(Dispatchers.IO) {
-                            val thumb = ThumbnailGenerator.generateForVideo(context, uri.toString())
-                            repository.saveMedia(uri.toString(), MediaType.VIDEO, duration, thumbnailPath = thumb)
-                        }
+                        val thumb = ThumbnailGenerator.generateForVideo(context, uri.toString())
+                        repository.saveMedia(uri.toString(), MediaType.VIDEO, duration, thumbnailPath = thumb)
                         sendToast("Видео сохранено")
                     }
                 },

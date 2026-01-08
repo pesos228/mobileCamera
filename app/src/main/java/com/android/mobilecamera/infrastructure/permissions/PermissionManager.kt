@@ -14,36 +14,48 @@ class PermissionManager(private val context: Context) {
             Manifest.permission.RECORD_AUDIO
         )
 
-        // Android 14+ (API 34)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-            permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        }
-        // Android 13 (API 33)
-        else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.READ_MEDIA_IMAGES)
-            permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
-        }
-        // Android 10-12 (API 29-32) - Scoped Storage, но READ нужен для своей галереи (если не через picker)
-        else {
-            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        permissions.addAll(getStoragePermissions())
 
-            // Android 9 и ниже (API <= 28) - нужен WRITE для сохранения
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            permissions.add(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
         }
 
         return permissions.toTypedArray()
     }
 
     fun hasAllPermissions(): Boolean {
-        return getRequiredPermissions().all { permission ->
-            ContextCompat.checkSelfPermission(
-                context,
-                permission
-            ) == PackageManager.PERMISSION_GRANTED
+        return getRequiredPermissions().all { isPermissionGranted(it) }
+    }
+
+    fun hasStoragePermissions(): Boolean {
+        val storagePermissions = getStoragePermissions()
+        return storagePermissions.all { isPermissionGranted(it) }
+    }
+
+    private fun getStoragePermissions(): List<String> {
+        return when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                listOf(
+                    Manifest.permission.READ_MEDIA_IMAGES,
+                    Manifest.permission.READ_MEDIA_VIDEO
+                )
+            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            else -> {
+                listOf(
+                    Manifest.permission.READ_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            }
         }
+    }
+
+    private fun isPermissionGranted(permission: String): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            permission
+        ) == PackageManager.PERMISSION_GRANTED
     }
 }
