@@ -21,12 +21,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.mobilecamera.feature.camera.CameraUiState
 import com.android.mobilecamera.feature.camera.ui.components.AspectRatioButton
 import com.android.mobilecamera.feature.camera.ui.components.CaptureButton
 import com.android.mobilecamera.feature.camera.ui.components.ModeButton
+import com.android.mobilecamera.R
+import kotlinx.coroutines.delay
 
 @Composable
 fun CameraScreenContent(
@@ -49,23 +52,23 @@ fun CameraScreenContent(
     if (showRationaleDialog) {
         AlertDialog(
             onDismissRequest = onRationaleDismiss,
-            title = { Text("Требуется разрешение") },
-            text = { Text("Для работы камеры необходимо дать разрешение на использование камеры и микрофона.") },
-            confirmButton = { Button(onClick = onRationaleConfirm) { Text("Дать разрешение") } },
-            dismissButton = { TextButton(onClick = onRationaleDismiss) { Text("Отмена") } }
+            title = { Text(stringResource(R.string.rationale_title)) },
+            text = { Text(stringResource(R.string.rationale_desc)) },
+            confirmButton = { Button(onClick = onRationaleConfirm) { Text(stringResource(R.string.rationale_confirm))  } },
+            dismissButton = { TextButton(onClick = onRationaleDismiss) { Text(stringResource(R.string.rationale_cancel))  } }
         )
     }
 
     if (!uiState.isCameraAvailable) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-            Text("Камера недоступна", color = Color.White)
+            Text(stringResource(R.string.camera_unavailable), color = Color.White)
         }
         return
     }
 
     if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Button(onClick = onPermissionRequest) { Text("Дать доступ к камере") }
+            Button(onClick = onPermissionRequest) { Text(stringResource(R.string.btn_request_permission))  }
         }
         return
     }
@@ -75,7 +78,6 @@ fun CameraScreenContent(
     var previewViewRef by remember { mutableStateOf<PreviewView?>(null) }
     var surfaceProvider by remember { mutableStateOf<Preview.SurfaceProvider?>(null) }
 
-    // Реактивный биндинг камеры при изменении параметров
     LaunchedEffect(
         surfaceProvider,
         uiState.isVideoMode,
@@ -120,7 +122,7 @@ fun CameraScreenContent(
 
         focusPoint?.let { point ->
             LaunchedEffect(point) {
-                kotlinx.coroutines.delay(1500)
+                delay(1500)
                 focusPoint = null
             }
             Box(
@@ -164,7 +166,7 @@ fun CameraScreenContent(
                 uiState.isVideoMode -> if (uiState.isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff
                 else -> if (uiState.flashMode == ImageCapture.FLASH_MODE_OFF) Icons.Default.FlashOff else Icons.Default.FlashOn
             }
-            Icon(flashIcon, contentDescription = "Flash", tint = Color.White)
+            Icon(flashIcon, contentDescription = stringResource(R.string.cd_flash), tint = Color.White)
         }
 
         if (!uiState.isRecording) {
@@ -177,8 +179,8 @@ fun CameraScreenContent(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                AspectRatioButton("4:3", uiState.aspectRatio == AspectRatio.RATIO_4_3) { onAspectRatioChange(AspectRatio.RATIO_4_3) }
-                AspectRatioButton("16:9", uiState.aspectRatio == AspectRatio.RATIO_16_9) { onAspectRatioChange(AspectRatio.RATIO_16_9) }
+                AspectRatioButton(stringResource(R.string.aspect_4_3), uiState.aspectRatio == AspectRatio.RATIO_4_3) { onAspectRatioChange(AspectRatio.RATIO_4_3) }
+                AspectRatioButton(stringResource(R.string.aspect_16_9), uiState.aspectRatio == AspectRatio.RATIO_16_9) { onAspectRatioChange(AspectRatio.RATIO_16_9) }
             }
         }
 
@@ -198,14 +200,14 @@ fun CameraScreenContent(
             ) {
                 if (!uiState.isRecording) {
                     IconButton(onClick = onNavigateToGallery, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = Color.White, modifier = Modifier.fillMaxSize())
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = stringResource(R.string.cd_gallery), tint = Color.White, modifier = Modifier.fillMaxSize())
                     }
                 } else {
                     Spacer(modifier = Modifier.size(48.dp))
                 }
                 CaptureButton(isRecording = uiState.isRecording, isVideoMode = uiState.isVideoMode, onClick = onCapture)
                 IconButton(onClick = onSwitchCamera, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Cameraswitch, contentDescription = "Switch", tint = Color.White, modifier = Modifier.fillMaxSize())
+                    Icon(Icons.Default.Cameraswitch, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White, modifier = Modifier.fillMaxSize())
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
@@ -213,8 +215,8 @@ fun CameraScreenContent(
                 Row(
                     modifier = Modifier.background(Color.DarkGray.copy(alpha = 0.5f), CircleShape).padding(4.dp)
                 ) {
-                    ModeButton("ФОТО", !uiState.isVideoMode, Icons.Default.PhotoCamera) { if (uiState.isVideoMode) onSwitchMode() }
-                    ModeButton("ВИДЕО", uiState.isVideoMode, Icons.Default.Videocam) { if (!uiState.isVideoMode) onSwitchMode() }
+                    ModeButton(stringResource(R.string.mode_photo_btn), !uiState.isVideoMode, Icons.Default.PhotoCamera) { if (uiState.isVideoMode) onSwitchMode() }
+                    ModeButton(stringResource(R.string.mode_video_btn), uiState.isVideoMode, Icons.Default.Videocam) { if (!uiState.isVideoMode) onSwitchMode() }
                 }
             }
         }

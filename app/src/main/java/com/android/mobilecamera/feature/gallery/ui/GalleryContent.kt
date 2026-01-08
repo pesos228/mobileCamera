@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import com.android.mobilecamera.feature.gallery.groupByDate
 import com.android.mobilecamera.feature.gallery.ui.components.MediaItemWithSelection
 import com.android.mobilecamera.feature.gallery.ui.components.SelectionTopBar
 import com.android.mobilecamera.feature.gallery.ui.components.SyncProgressDialog
+import com.android.mobilecamera.R
 
 @Composable
 fun GalleryContent(
@@ -114,14 +116,14 @@ fun GalleryContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Галерея пуста",
+                    text = stringResource(R.string.gallery_empty_title),
                     color = Color.White.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.titleLarge,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Нажмите + для тестов\nили кнопку ↻ для поиска файлов",
+                    text = stringResource(R.string.gallery_empty_hint),
                     color = Color.White.copy(alpha = 0.4f),
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
@@ -166,7 +168,7 @@ fun GalleryContent(
                     containerColor = Color(0xFFF44336),
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Очистить всё")
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_clear_all))
                 }
 
                 FloatingActionButton(
@@ -174,7 +176,7 @@ fun GalleryContent(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Добавить тестовые данные")
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_add_mocks))
                 }
             }
         }

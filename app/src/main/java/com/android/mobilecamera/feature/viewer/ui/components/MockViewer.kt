@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import com.android.mobilecamera.data.database.MediaEntity
 import com.android.mobilecamera.data.database.MediaType
 import kotlin.random.Random
+import androidx.compose.ui.res.stringResource
+import com.android.mobilecamera.R
 
 @Composable
 fun MockViewer(item: MediaEntity) {
@@ -20,6 +22,13 @@ fun MockViewer(item: MediaEntity) {
         val rnd = Random(item.id)
         Color(rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256))
     }
+
+    val titleResId = if (item.type == MediaType.VIDEO) {
+        R.string.mock_video_label
+    } else {
+        R.string.mock_photo_label
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -28,13 +37,13 @@ fun MockViewer(item: MediaEntity) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = if (item.type == MediaType.VIDEO) "MOCK VIDEO" else "MOCK PHOTO",
+                text = stringResource(titleResId),
                 style = MaterialTheme.typography.displayMedium,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "ID: ${item.id}",
+                text = stringResource(R.string.mock_item_id, item.id),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.7f)
             )

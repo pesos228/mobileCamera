@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.android.mobilecamera.R
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
@@ -97,7 +99,7 @@ fun MediaItemWithSelection(
         if (item.type == MediaType.VIDEO) {
             Icon(
                 imageVector = Icons.Default.PlayCircle,
-                contentDescription = "Video",
+                contentDescription = stringResource(R.string.cd_media_type_video),
                 tint = Color.White,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -122,6 +124,12 @@ fun MediaItemWithSelection(
             }
         }
 
+        val selectionDesc = if (isSelected) {
+            stringResource(R.string.cd_state_selected)
+        } else {
+            stringResource(R.string.cd_state_not_selected)
+        }
+
         AnimatedVisibility(
             visible = isSelectionMode,
             enter = fadeIn(),
@@ -132,7 +140,7 @@ fun MediaItemWithSelection(
         ) {
             Icon(
                 imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-                contentDescription = null,
+                contentDescription = selectionDesc,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.White,
                 modifier = Modifier
                     .size(24.dp)

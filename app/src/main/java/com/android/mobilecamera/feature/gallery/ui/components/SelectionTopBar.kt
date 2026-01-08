@@ -17,8 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.mobilecamera.R
 
 @Composable
 fun SelectionTopBar(
@@ -44,7 +46,7 @@ fun SelectionTopBar(
                 IconButton(onClick = onClearSelection) {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Отменить",
+                        contentDescription = stringResource(R.string.action_cancel_selection),
                         tint = Color.White
                     )
                 }
@@ -59,7 +61,7 @@ fun SelectionTopBar(
             IconButton(onClick = onDeleteSelected) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Удалить",
+                    contentDescription = stringResource(R.string.action_delete),
                     tint = Color(0xFFF44336)
                 )
             }
