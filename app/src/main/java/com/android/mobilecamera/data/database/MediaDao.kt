@@ -21,4 +21,10 @@ interface MediaDao {
 
     @Query("DELETE FROM media_table")
     suspend fun deleteAll()
+
+    @Query("SELECT * FROM media_table WHERE id = :mediaId")
+    suspend fun getMediaById(mediaId: Int): MediaEntity?
+
+    @Query("SELECT COUNT(*) FROM media_table")
+    suspend fun getCount(): Int
 }

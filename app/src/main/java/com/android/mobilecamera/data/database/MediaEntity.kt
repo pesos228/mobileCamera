@@ -10,5 +10,7 @@ data class MediaEntity(
 
     val path: String,
     val type: MediaType,
-    val timestamp: Long
+    val timestamp: Long,
+    val duration: Long? = null,
+    val thumbnailPath: String? = null
 )
