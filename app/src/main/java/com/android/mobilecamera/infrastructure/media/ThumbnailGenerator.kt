@@ -21,34 +21,9 @@ object ThumbnailGenerator {
     private const val THUMBNAIL_SIZE = 300
     private const val THUMBNAIL_QUALITY = 80
 
-    suspend fun generateForVideo(context: Context, videoUri: String): String? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val retriever = MediaMetadataRetriever()
-                retriever.setDataSource(context, videoUri.toUri())
-
-                val bitmap = retriever.getFrameAtTime(
-                    1_000_000,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                ) ?: retriever.frameAtTime
-
-                retriever.release()
-
-                if (bitmap != null) {
-                    saveBitmapToCache(context, bitmap, "vid_thumb")
-                } else {
-                    Log.w(TAG, "Failed to retrieve video frame for thumbnail")
-                    null
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error generating video thumbnail", e)
-                null
-            }
-        }
-    }
-
     suspend fun generateForPhoto(context: Context, photoUri: String): String? {
         return withContext(Dispatchers.IO) {
+            var bitmap: Bitmap? = null
             try {
                 val uri = photoUri.toUri()
 
@@ -62,7 +37,7 @@ object ThumbnailGenerator {
                 options.inSampleSize = calculateInSampleSize(options)
                 options.inJustDecodeBounds = false
 
-                val bitmap = context.contentResolver.openInputStream(uri)?.use {
+                bitmap = context.contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it, null, options)
                 }
 
@@ -71,12 +46,56 @@ object ThumbnailGenerator {
                     return@withContext null
                 }
 
-                val rotatedBitmap = fixOrientation(context, uri, bitmap)
+                val rotatedBitmap = fixOrientation(context, uri, bitmap!!)
 
-                saveBitmapToCache(context, rotatedBitmap, "img_thumb")
+                val result = saveBitmapToCache(context, rotatedBitmap, "img_thumb")
+
+                if (rotatedBitmap != bitmap) {
+                    rotatedBitmap.recycle()
+                }
+
+                return@withContext result
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error generating photo thumbnail", e)
-                null
+                return@withContext null
+            } finally {
+                bitmap?.recycle()
+            }
+        }
+    }
+
+    suspend fun generateForVideo(context: Context, videoUri: String): String? {
+        return withContext(Dispatchers.IO) {
+            var bitmap: Bitmap? = null
+            var retriever: MediaMetadataRetriever? = null
+            try {
+                retriever = MediaMetadataRetriever()
+                retriever.setDataSource(context, videoUri.toUri())
+
+                bitmap = retriever.getFrameAtTime(
+                    1_000_000,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                ) ?: retriever.frameAtTime
+
+                if (bitmap != null) {
+                    val result = saveBitmapToCache(context, bitmap, "vid_thumb")
+                    bitmap.recycle()
+                    return@withContext result
+                } else {
+                    Log.w(TAG, "Failed to retrieve video frame for thumbnail")
+                    return@withContext null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error generating video thumbnail", e)
+                return@withContext null
+            } finally {
+                try {
+                    retriever?.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error releasing MediaMetadataRetriever", e)
+                }
+                bitmap?.recycle()
             }
         }
     }
@@ -126,7 +145,6 @@ object ThumbnailGenerator {
             FileOutputStream(file).use { out ->
                 bitmap.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_QUALITY, out)
             }
-            bitmap.recycle()
             file.absolutePath
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save thumbnail to cache", e)

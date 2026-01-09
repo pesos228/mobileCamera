@@ -1,5 +1,7 @@
 package com.android.mobilecamera.feature.gallery
 
+import android.content.Context
+import com.android.mobilecamera.R
 import com.android.mobilecamera.data.database.MediaEntity
 import java.text.SimpleDateFormat
 import java.util.*
@@ -9,7 +11,7 @@ data class MediaGroup(
     val items: List<MediaEntity>
 )
 
-fun List<MediaEntity>.groupByDate(): List<MediaGroup> {
+fun List<MediaEntity>.groupByDate(context: Context): List<MediaGroup> {
     val calendar = Calendar.getInstance()
     val today = calendar.apply {
         set(Calendar.HOUR_OF_DAY, 0)
@@ -35,10 +37,11 @@ fun List<MediaEntity>.groupByDate(): List<MediaGroup> {
         }
         .map { (timestamp, items) ->
             val dateLabel = when {
-                timestamp >= today -> "Сегодня"
-                timestamp >= yesterday -> "Вчера"
+                timestamp >= today -> context.getString(R.string.date_today)
+                timestamp >= yesterday -> context.getString(R.string.date_yesterday)
                 else -> {
-                    val dateFormat = SimpleDateFormat("d MMMM yyyy", Locale.forLanguageTag("ru"))
+                    val pattern = context.getString(R.string.date_format_pattern)
+                    val dateFormat = SimpleDateFormat(pattern, Locale.getDefault())
                     dateFormat.format(Date(timestamp))
                 }
             }

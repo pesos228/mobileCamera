@@ -37,6 +37,7 @@ class CameraManager(
     private var recorder: Recorder? = null
 
     private var activeRecording: Recording? = null
+
     @Volatile
     private var isStoppingRecording = false
     private val recordingLock = Any()
@@ -91,6 +92,11 @@ class CameraManager(
         onCameraInitialized: (CameraControl, CameraInfo) -> Unit
     ) {
         try {
+            val isRecordingNow = activeRecording != null
+            if (isRecordingNow) {
+                activeRecording?.pause()
+            }
+
             provider.unbindAll()
 
             val cameraSelector = CameraSelector.Builder()
@@ -155,15 +161,22 @@ class CameraManager(
                 }
             }
 
+            if (isRecordingNow) {
+                activeRecording?.resume()
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Binding to lifecycle failed", e)
+            if (activeRecording != null) {
+                activeRecording?.stop()
+                activeRecording = null
+            }
             throw e
         }
     }
 
     fun toggleTorch(enabled: Boolean) {
         val cam = camera ?: return
-
         if (cam.cameraInfo.hasFlashUnit()) {
             cam.cameraControl.enableTorch(enabled)
             _torchState.value = enabled
@@ -193,9 +206,7 @@ class CameraManager(
         } else {
             CameraSelector.LENS_FACING_BACK
         }
-
         _torchState.value = false
-
         return lensFacing
     }
 
@@ -253,7 +264,9 @@ class CameraManager(
                 .start(mainExecutor) { event ->
                     when (event) {
                         is VideoRecordEvent.Finalize -> {
-                            handleRecordingFinalize(event, onVideoSaved, onError)
+                            handleRecordingFinalize(event, onVideoSaved) {
+                                onError()
+                            }
                         }
                     }
                 }
@@ -276,7 +289,7 @@ class CameraManager(
                 onVideoSaved(uri, duration)
             } else {
                 if (uri != Uri.EMPTY && duration > 0) {
-                    Log.w(TAG, "Video finalized with error but saved. Code: ${event.error}")
+                    Log.w(TAG, "Video finalized with error but saved (likely during stop). Code: ${event.error}")
                     onVideoSaved(uri, duration)
                 } else {
                     Log.e(TAG, "Video capture failed completely. Error code: ${event.error}")
@@ -289,23 +302,15 @@ class CameraManager(
     fun stopVideoRecording(): Boolean {
         synchronized(recordingLock) {
             val recording = activeRecording
-            if (recording == null) {
-                Log.w(TAG, "stopVideoRecording: no active recording")
-                return false
-            }
+            if (recording == null) return false
 
-            if (isStoppingRecording) {
-                Log.w(TAG, "stopVideoRecording: already stopping")
-                return false
-            }
+            if (isStoppingRecording) return false
 
             isStoppingRecording = true
-
             activeRecording = null
 
             try {
                 recording.stop()
-                Log.d(TAG, "Recording stop initiated")
                 return true
             } catch (e: Exception) {
                 Log.e(TAG, "Error stopping recording", e)
@@ -336,7 +341,6 @@ class CameraManager(
 
         cameraProvider?.unbindAll()
         cameraProvider = null
-
         camera = null
         preview = null
         imageCapture = null
