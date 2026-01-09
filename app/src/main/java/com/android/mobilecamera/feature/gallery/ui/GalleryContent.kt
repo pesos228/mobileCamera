@@ -31,6 +31,7 @@ import com.android.mobilecamera.R
 @Composable
 fun GalleryContent(
     uiState: GalleryUiState,
+    snackbarHostState: SnackbarHostState,
     onMediaClick: (Int) -> Unit,
     onMediaLongClick: (Int) -> Unit,
     onClearClick: () -> Unit,
@@ -180,6 +181,14 @@ fun GalleryContent(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp)
+        )
     }
 }
 

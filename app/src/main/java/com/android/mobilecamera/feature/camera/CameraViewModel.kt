@@ -2,6 +2,7 @@ package com.android.mobilecamera.feature.camera
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -12,6 +13,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.mobilecamera.R
 import com.android.mobilecamera.data.database.AppDatabase
 import com.android.mobilecamera.data.database.MediaType
 import com.android.mobilecamera.data.repository.MediaRepository
@@ -19,13 +21,17 @@ import com.android.mobilecamera.infrastructure.camera.CameraManager
 import com.android.mobilecamera.infrastructure.media.MediaManager
 import com.android.mobilecamera.infrastructure.media.ThumbnailGenerator
 import com.android.mobilecamera.infrastructure.permissions.PermissionManager
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private const val TAG = "CameraViewModel"
+
+sealed interface CameraMessage {
+    data class ResourceError(val resId: Int) : CameraMessage
+}
 
 data class CameraUiState(
     val isVideoMode: Boolean = false,
@@ -36,12 +42,9 @@ data class CameraUiState(
     val isTorchOn: Boolean = false,
     val isCameraAvailable: Boolean = true,
     val aspectRatio: Int = AspectRatio.RATIO_4_3,
-    val lensFacing: Int = CameraSelector.LENS_FACING_BACK
+    val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
+    val message: CameraMessage? = null
 )
-
-sealed class CameraEvent {
-    data class ShowToast(val message: String) : CameraEvent()
-}
 
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -53,9 +56,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _uiState = MutableStateFlow(CameraUiState())
     val uiState = _uiState.asStateFlow()
-
-    private val _events = Channel<CameraEvent>(Channel.BUFFERED)
-    val events = _events.receiveAsFlow()
 
     init {
         viewModelScope.launch {
@@ -73,7 +73,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             onCameraInitialized = { _, _ ->
                 _uiState.update { it.copy(isCameraAvailable = true) }
             },
-            onError = { e -> onCameraInitError(e) }
+            onError = { e ->
+                Log.e(TAG, "Camera initialization failed", e)
+                onCameraInitError()
+            }
         )
     }
 
@@ -91,9 +94,11 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 val uri = cameraManager.takePhoto()
                 val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
                 repository.saveMedia(uri.toString(), MediaType.PHOTO, thumbnailPath = thumb)
-                sendToast("Фото сохранено")
             } catch (e: Exception) {
-                sendToast("Ошибка фото: ${e.message}")
+                Log.e(TAG, "Photo capture failed", e)
+                _uiState.update {
+                    it.copy(message = CameraMessage.ResourceError(R.string.error_photo_capture))
+                }
             }
         }
     }
@@ -109,13 +114,20 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             val recording = cameraManager.startVideoRecording(
                 withAudio = hasAudio,
                 onVideoSaved = { uri, duration ->
+                    _uiState.update { it.copy(isRecording = false) }
                     viewModelScope.launch {
                         val thumb = ThumbnailGenerator.generateForVideo(context, uri.toString())
                         repository.saveMedia(uri.toString(), MediaType.VIDEO, duration, thumbnailPath = thumb)
-                        sendToast("Видео сохранено")
                     }
                 },
-                onError = { msg -> sendToast(msg) }
+                onError = {
+                    _uiState.update {
+                        it.copy(
+                            isRecording = false,
+                            message = CameraMessage.ResourceError(R.string.error_video_recording)
+                        )
+                    }
+                }
             )
 
             if (recording != null) {
@@ -138,7 +150,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setAspectRatio(ratio: Int) {
         if (_uiState.value.isRecording) {
-            sendToast("Нельзя менять формат при записи")
+            _uiState.update {
+                it.copy(message = CameraMessage.ResourceError(R.string.error_aspect_ratio_change))
+            }
             return
         }
         cameraManager.setAspectRatio(ratio)
@@ -176,18 +190,22 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun sendToast(msg: String) {
-        viewModelScope.launch { _events.send(CameraEvent.ShowToast(msg)) }
-    }
-
     override fun onCleared() {
         super.onCleared()
         cameraManager.cleanup()
     }
 
-    fun onCameraInitError(e: Exception) {
-        _uiState.update { it.copy(isCameraAvailable = false) }
-        sendToast("Ошибка инициализации камеры: ${e.message}")
+    private fun onCameraInitError() {
+        _uiState.update {
+            it.copy(
+                isCameraAvailable = false,
+                message = CameraMessage.ResourceError(R.string.error_camera_init)
+            )
+        }
+    }
+
+    fun clearMessage() {
+        _uiState.update { it.copy(message = null) }
     }
 }
 

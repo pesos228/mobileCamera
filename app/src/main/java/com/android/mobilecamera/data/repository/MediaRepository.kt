@@ -59,4 +59,8 @@ class MediaRepository(
     suspend fun isEmpty(): Boolean {
         return mediaDao.getCount() == 0
     }
+
+    suspend fun getMediaById(mediaId: Int): MediaEntity? {
+        return mediaDao.getMediaById(mediaId)
+    }
 }

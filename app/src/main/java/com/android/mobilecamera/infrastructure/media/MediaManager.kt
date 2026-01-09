@@ -18,10 +18,12 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+private const val TAG = "MediaManager"
+
 sealed class DeleteResult {
     data class Success(val deletedCount: Int) : DeleteResult()
     data class RequiresPermission(val intentSender: IntentSender) : DeleteResult()
-    data class Error(val message: String) : DeleteResult()
+    object Error : DeleteResult()
 }
 
 class MediaManager(context: Context) {
@@ -118,7 +120,7 @@ class MediaManager(context: Context) {
                 // На API 29+ (Android 10+) это означает "нужны права"
                 filesRequiringPermission.add(uri)
             } catch (e: Exception) {
-                Log.e("MediaManager", "Error pre-deleting $uri", e)
+                Log.e(TAG, "Error pre-deleting $uri", e)
             }
         }
 
@@ -136,8 +138,9 @@ class MediaManager(context: Context) {
             return try {
                 val pi = MediaStore.createDeleteRequest(contentResolver, uris)
                 DeleteResult.RequiresPermission(pi.intentSender)
-            } catch (_: Exception) {
-                DeleteResult.Error("Failed to request permission")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create delete request (Android 11+)", e)
+                DeleteResult.Error
             }
         }
 
@@ -148,7 +151,8 @@ class MediaManager(context: Context) {
             val uri = uris.first()
             return try {
                 contentResolver.delete(uri, null, null)
-                DeleteResult.Error("Unexpected state")
+                Log.e(TAG, "Unexpected state: file deleted without permission request on retry")
+                DeleteResult.Error
             } catch (securityException: SecurityException) {
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -159,9 +163,11 @@ class MediaManager(context: Context) {
                 }
 
                 // Для Android 8-9 (или если на 10-ке ошибка не Recoverable)
-                DeleteResult.Error("Permission denied. Check WRITE_EXTERNAL_STORAGE.")
+                Log.e(TAG, "Permission denied permanently or legacy storage issue", securityException)
+                DeleteResult.Error
             } catch (e: Exception) {
-                DeleteResult.Error(e.message ?: "Unknown error")
+                Log.e(TAG, "Unknown error during delete retry", e)
+                DeleteResult.Error
             }
         }
     }
@@ -171,7 +177,8 @@ class MediaManager(context: Context) {
             contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), null, null, null)?.use { cursor ->
                 cursor.moveToFirst()
             } ?: false
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check file existence: $uri", e)
             false
         }
     }

@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+private const val TAG = "CameraManager"
+
 class CameraManager(
     private val context: Context,
     private val mediaManager: MediaManager
@@ -56,7 +58,7 @@ class CameraManager(
         onError: (Exception) -> Unit
     ) {
         if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
-            Log.w("CameraManager", "LifecycleOwner is DESTROYED, skipping")
+            Log.w(TAG, "LifecycleOwner is DESTROYED, skipping")
             return
         }
 
@@ -68,14 +70,14 @@ class CameraManager(
                 cameraProvider = provider
 
                 if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
-                    Log.w("CameraManager", "LifecycleOwner became DESTROYED, aborting")
+                    Log.w(TAG, "LifecycleOwner became DESTROYED, aborting")
                     return@addListener
                 }
 
                 bindCamera(provider, lifecycleOwner, surfaceProvider, isVideoMode, onCameraInitialized)
 
             } catch (e: Exception) {
-                Log.e("CameraManager", "Camera binding failed", e)
+                Log.e(TAG, "Camera binding failed", e)
                 onError(e)
             }
         }, mainExecutor)
@@ -154,7 +156,7 @@ class CameraManager(
             }
 
         } catch (e: Exception) {
-            Log.e("CameraManager", "Binding to lifecycle failed", e)
+            Log.e(TAG, "Binding to lifecycle failed", e)
             throw e
         }
     }
@@ -231,11 +233,11 @@ class CameraManager(
     fun startVideoRecording(
         withAudio: Boolean,
         onVideoSaved: (Uri, Long) -> Unit,
-        onError: (String) -> Unit
+        onError: () -> Unit
     ): Recording? {
         synchronized(recordingLock) {
             if (isStoppingRecording) {
-                onError("Предыдущая запись еще останавливается, подождите...")
+                onError()
                 return null
             }
 
@@ -262,7 +264,7 @@ class CameraManager(
     private fun handleRecordingFinalize(
         event: VideoRecordEvent.Finalize,
         onVideoSaved: (Uri, Long) -> Unit,
-        onError: (String) -> Unit
+        onError: () -> Unit
     ) {
         synchronized(recordingLock) {
             isStoppingRecording = false
@@ -274,9 +276,11 @@ class CameraManager(
                 onVideoSaved(uri, duration)
             } else {
                 if (uri != Uri.EMPTY && duration > 0) {
+                    Log.w(TAG, "Video finalized with error but saved. Code: ${event.error}")
                     onVideoSaved(uri, duration)
                 } else {
-                    onError("Video capture failed: ${event.error}")
+                    Log.e(TAG, "Video capture failed completely. Error code: ${event.error}")
+                    onError()
                 }
             }
         }
@@ -286,12 +290,12 @@ class CameraManager(
         synchronized(recordingLock) {
             val recording = activeRecording
             if (recording == null) {
-                Log.w("CameraManager", "stopVideoRecording: no active recording")
+                Log.w(TAG, "stopVideoRecording: no active recording")
                 return false
             }
 
             if (isStoppingRecording) {
-                Log.w("CameraManager", "stopVideoRecording: already stopping")
+                Log.w(TAG, "stopVideoRecording: already stopping")
                 return false
             }
 
@@ -301,10 +305,10 @@ class CameraManager(
 
             try {
                 recording.stop()
-                Log.d("CameraManager", "Recording stop initiated")
+                Log.d(TAG, "Recording stop initiated")
                 return true
             } catch (e: Exception) {
-                Log.e("CameraManager", "Error stopping recording", e)
+                Log.e(TAG, "Error stopping recording", e)
                 isStoppingRecording = false
                 return false
             }

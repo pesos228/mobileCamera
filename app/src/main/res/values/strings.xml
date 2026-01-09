@@ -29,4 +29,20 @@
     <string name="mode_video_btn">ВИДЕО</string>
     <string name="aspect_4_3">4:3</string>
     <string name="aspect_16_9">16:9</string>
+    <string name="msg_delete_cancelled">Удаление отменено</string>
+    <string name="msg_cleared_all">Все записи очищены из БД</string>
+    <plurals name="deleted_files">
+        <item quantity="one">Удален %d файл</item>
+        <item quantity="few">Удалено %d файла</item>
+        <item quantity="many">Удалено %d файлов</item>
+        <item quantity="other">Удалено %d файлов</item>
+    </plurals>
+    <string name="msg_delete_error">Ошибка: %1$s</string>
+    <string name="msg_permission_request_error">Ошибка запроса разрешения</string>
+    <string name="error_photo_capture">Не удалось сохранить фото</string>
+    <string name="error_video_recording">Не удалось записать видео</string>
+    <string name="error_aspect_ratio_change">Нельзя менять формат во время записи</string>
+    <string name="error_camera_init">Ошибка запуска камеры</string>
+    <string name="msg_permissions_required">Для работы необходим доступ к камере</string>
+
 </resources>

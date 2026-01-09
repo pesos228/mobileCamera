@@ -15,6 +15,8 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
+private const val TAG = "MediaSyncManager"
+
 class MediaSyncManager(
     private val context: Context,
 ) {
@@ -32,7 +34,7 @@ class MediaSyncManager(
 
             if (allMedia.isEmpty()) return@withContext 0
 
-            Log.d("MediaSyncManager", "Found ${allMedia.size} files. Starting parallel sync...")
+            Log.d(TAG, "Found ${allMedia.size} files. Starting parallel sync...")
 
             val cores = Runtime.getRuntime().availableProcessors()
             val parallelism = cores.coerceIn(3, 5)
@@ -53,7 +55,7 @@ class MediaSyncManager(
                                 thumbnailPath
                             )
                         } catch (e: Exception) {
-                            Log.e("MediaSyncManager", "Error processing ${mediaInfo.displayName}", e)
+                            Log.e(TAG, "Error processing ${mediaInfo.displayName}", e)
                         } finally {
                             val current = progressCounter.incrementAndGet()
                             onProgress?.invoke(current, allMedia.size)
@@ -62,11 +64,11 @@ class MediaSyncManager(
                 }
             }.awaitAll()
 
-            Log.d("MediaSyncManager", "Sync completed")
+            Log.d(TAG, "Sync completed. Total: ${allMedia.size}")
             return@withContext allMedia.size
 
         } catch (e: Exception) {
-            Log.e("MediaSyncManager", "Sync global failed", e)
+            Log.e(TAG, "Sync global failed", e)
             return@withContext 0
         }
     }
@@ -97,12 +99,8 @@ class MediaSyncManager(
             if (durationColumn != null) add(durationColumn)
         }.toTypedArray()
 
-        // WHERE условие
         val selection = "$pathCol LIKE ?"
-
-        // Аргументы поиска
         val selectionArgs = arrayOf("%$folderName%")
-
         val sortOrder = "$dateCol DESC"
 
         try {
@@ -137,20 +135,16 @@ class MediaSyncManager(
                 }
             }
         } catch (e: Exception) {
-            Log.e("MediaSyncManager", "Scan failed for $type", e)
+            Log.e(TAG, "Scan failed for type: $type", e)
         }
 
         return mediaList
     }
 
     private suspend fun generateThumbnail(mediaInfo: MediaInfo): String? {
-        return try {
-            when (mediaInfo.type) {
-                MediaType.PHOTO -> ThumbnailGenerator.generateForPhoto(context, mediaInfo.uri.toString())
-                MediaType.VIDEO -> ThumbnailGenerator.generateForVideo(context, mediaInfo.uri.toString())
-            }
-        } catch (e: Exception) {
-            null
+        return when (mediaInfo.type) {
+            MediaType.PHOTO -> ThumbnailGenerator.generateForPhoto(context, mediaInfo.uri.toString())
+            MediaType.VIDEO -> ThumbnailGenerator.generateForVideo(context, mediaInfo.uri.toString())
         }
     }
 

@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.mobilecamera.R
 import com.android.mobilecamera.data.database.AppDatabase
 import com.android.mobilecamera.data.database.MediaEntity
 import com.android.mobilecamera.data.database.MediaType
@@ -19,13 +20,20 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+private const val TAG = "GalleryViewModel"
+
+sealed interface GalleryMessage {
+    data class DeleteSuccess(val count: Int) : GalleryMessage
+    data class SimpleMessage(val resId: Int) : GalleryMessage
+}
+
 data class GalleryUiState(
     val mediaList: List<MediaEntity> = emptyList(),
     val selectedItems: Set<Int> = emptySet(),
     val isSelectionMode: Boolean = false,
     val isSyncing: Boolean = false,
     val syncProgress: Pair<Int, Int>? = null,
-    val deleteMessage: String? = null
+    val message: GalleryMessage? = null
 )
 
 class GalleryViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,7 +48,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val _isSelectionMode = MutableStateFlow(false)
     private val _isSyncing = MutableStateFlow(false)
     private val _syncProgress = MutableStateFlow<Pair<Int, Int>?>(null)
-    private val _deleteMessage = MutableStateFlow<String?>(null)
+    private val _message = MutableStateFlow<GalleryMessage?>(null)
 
     private val _pendingDeleteRequest = MutableStateFlow<IntentSender?>(null)
     val pendingDeleteRequest: StateFlow<IntentSender?> = _pendingDeleteRequest.asStateFlow()
@@ -52,7 +60,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     ) { media, selected, selectionMode ->
         Triple(media, selected, selectionMode)
     }.combine(
-        combine(_isSyncing, _syncProgress, _deleteMessage) { syncing, progress, message ->
+        combine(_isSyncing, _syncProgress, _message) { syncing, progress, message ->
             Triple(syncing, progress, message)
         }
     ) { first, second ->
@@ -62,7 +70,7 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
             isSelectionMode = first.third,
             isSyncing = second.first,
             syncProgress = second.second,
-            deleteMessage = second.third
+            message = second.third
         )
     }.stateIn(viewModelScope, SharingStarted.Lazily, GalleryUiState())
 
@@ -74,14 +82,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     private fun syncMediaFromStorage() {
         if (_isSyncing.value) {
-            Log.w("GalleryViewModel", "Sync already in progress")
+            Log.w(TAG, "Sync already in progress")
             return
         }
 
         viewModelScope.launch {
             try {
                 if (!repository.isEmpty()) {
-                    Log.d("GalleryViewModel", "Database not empty, skipping sync")
+                    Log.d(TAG, "Database not empty, skipping sync")
                     return@launch
                 }
 
@@ -104,11 +112,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
                 )
 
                 if (restoredCount > 0) {
-                    Log.d("GalleryViewModel", "Restored $restoredCount files")
+                    Log.d(TAG, "Restored $restoredCount files")
                 }
 
             } catch (e: Exception) {
-                Log.e("GalleryViewModel", "Sync failed", e)
+                Log.e(TAG, "Sync failed", e)
             } finally {
                 _isSyncing.value = false
                 _syncProgress.value = null
@@ -118,21 +126,25 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun createMocks() {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val oneDay = 24 * 60 * 60 * 1000L
+            try {
+                val now = System.currentTimeMillis()
+                val oneDay = 24 * 60 * 60 * 1000L
 
-            for (i in 1..12) {
-                val isVideo = i % 3 == 0
-                val duration = if (isVideo) Random.nextLong(5000, 120000) else null
-                val daysAgo = (i - 1) / 4
-                val timestamp = now - (daysAgo * oneDay) - (i * 60 * 1000L)
+                for (i in 1..12) {
+                    val isVideo = i % 3 == 0
+                    val duration = if (isVideo) Random.nextLong(5000, 120000) else null
+                    val daysAgo = (i - 1) / 4
+                    val timestamp = now - (daysAgo * oneDay) - (i * 60 * 1000L)
 
-                repository.saveMedia(
-                    path = "mock_$i",
-                    type = if (isVideo) MediaType.VIDEO else MediaType.PHOTO,
-                    duration = duration,
-                    timestamp = timestamp
-                )
+                    repository.saveMedia(
+                        path = "mock_$i",
+                        type = if (isVideo) MediaType.VIDEO else MediaType.PHOTO,
+                        duration = duration,
+                        timestamp = timestamp
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create mocks", e)
             }
         }
     }
@@ -168,14 +180,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
             when (val result = repository.deleteMultipleMedia(itemsToDelete)) {
                 is DeleteResult.Success -> {
-                    _deleteMessage.value = "Удалено файлов: ${result.deletedCount}"
+                    _message.value = GalleryMessage.DeleteSuccess(result.deletedCount)
                     clearSelection()
                 }
                 is DeleteResult.RequiresPermission -> {
                     _pendingDeleteRequest.value = result.intentSender
                 }
                 is DeleteResult.Error -> {
-                    _deleteMessage.value = result.message
+                    _message.value = GalleryMessage.SimpleMessage(R.string.msg_delete_error)
                 }
             }
         }
@@ -186,26 +198,30 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         if (granted) {
             deleteSelected()
         } else {
-            _deleteMessage.value = "Удаление отменено"
+            _message.value = GalleryMessage.SimpleMessage(R.string.msg_delete_cancelled)
         }
     }
 
-    fun clearDeleteMessage() {
-        _deleteMessage.value = null
+    fun clearMessage() {
+        _message.value = null
     }
 
     fun clearAll() {
         viewModelScope.launch {
-            repository.clearAll()
-            clearSelection()
-            _deleteMessage.value = "Все записи очищены из БД"
+            try {
+                repository.clearAll()
+                clearSelection()
+                _message.value = GalleryMessage.SimpleMessage(R.string.msg_cleared_all)
+            } catch (e: Exception) {
+                Log.e(TAG, "Clear all failed", e)
+            }
         }
     }
 }
 
-@Suppress("UNCHECKED_CAST")
 class GalleryViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        @Suppress("UNCHECKED_CAST")
         return GalleryViewModel(application) as T
     }
 }

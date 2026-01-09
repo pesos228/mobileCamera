@@ -5,13 +5,24 @@ import android.app.Application
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.mobilecamera.R
 import com.android.mobilecamera.feature.camera.ui.CameraScreenContent
 import com.android.mobilecamera.infrastructure.permissions.PermissionManager
+
+@Composable
+private fun formatCameraMessage(message: CameraMessage): String {
+    return when (message) {
+        is CameraMessage.ResourceError -> stringResource(message.resId)
+    }
+}
 
 @Composable
 fun CameraRoute(
@@ -26,18 +37,13 @@ fun CameraRoute(
     val permissionManager = remember { PermissionManager(context) }
     val uiState by viewModel.uiState.collectAsState()
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val currentMessage = uiState.message?.let { formatCameraMessage(it) }
+
     var hasPermission by remember { mutableStateOf(permissionManager.hasAllPermissions()) }
     var showRationaleDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        viewModel.events.collect { event ->
-            when (event) {
-                is CameraEvent.ShowToast -> {
-                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
+    val permissionNeededText = stringResource(R.string.msg_permissions_required)
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -45,7 +51,18 @@ fun CameraRoute(
         if (permissions.entries.all { it.value }) {
             hasPermission = true
         } else {
-            Toast.makeText(context, "Нужны права для работы камеры", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, permissionNeededText, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(currentMessage) {
+        currentMessage?.let { text ->
+            snackbarHostState.showSnackbar(
+                message = text,
+                duration = SnackbarDuration.Short,
+                withDismissAction = true
+            )
+            viewModel.clearMessage()
         }
     }
 
@@ -73,6 +90,7 @@ fun CameraRoute(
 
     CameraScreenContent(
         uiState = uiState,
+        snackbarHostState = snackbarHostState,
         hasPermission = hasPermission,
         onPermissionRequest = { checkAndRequestPermissions() },
         showRationaleDialog = showRationaleDialog,

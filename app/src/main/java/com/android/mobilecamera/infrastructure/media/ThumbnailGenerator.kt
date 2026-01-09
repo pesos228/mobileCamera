@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.MediaMetadataRetriever
+import android.util.Log
 import androidx.core.net.toUri
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+
+private const val TAG = "ThumbnailGenerator"
 
 object ThumbnailGenerator {
 
@@ -31,9 +34,14 @@ object ThumbnailGenerator {
 
                 retriever.release()
 
-                bitmap?.let { saveBitmapToCache(context, it, "vid_thumb") }
+                if (bitmap != null) {
+                    saveBitmapToCache(context, bitmap, "vid_thumb")
+                } else {
+                    Log.w(TAG, "Failed to retrieve video frame for thumbnail")
+                    null
+                }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Error generating video thumbnail", e)
                 null
             }
         }
@@ -56,13 +64,18 @@ object ThumbnailGenerator {
 
                 val bitmap = context.contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it, null, options)
-                } ?: return@withContext null
+                }
+
+                if (bitmap == null) {
+                    Log.w(TAG, "Failed to decode bitmap from stream")
+                    return@withContext null
+                }
 
                 val rotatedBitmap = fixOrientation(context, uri, bitmap)
 
                 saveBitmapToCache(context, rotatedBitmap, "img_thumb")
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Error generating photo thumbnail", e)
                 null
             }
         }
@@ -99,7 +112,7 @@ object ThumbnailGenerator {
                 bitmap
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w(TAG, "Failed to fix orientation, using original", e)
             bitmap
         }
     }
@@ -116,7 +129,7 @@ object ThumbnailGenerator {
             bitmap.recycle()
             file.absolutePath
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to save thumbnail to cache", e)
             null
         }
     }

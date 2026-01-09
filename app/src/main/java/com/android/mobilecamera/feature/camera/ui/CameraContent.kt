@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun CameraScreenContent(
     uiState: CameraUiState,
+    snackbarHostState: SnackbarHostState,
     onCapture: () -> Unit,
     onSwitchMode: () -> Unit,
     onSwitchCamera: () -> Unit,
@@ -220,6 +221,14 @@ fun CameraScreenContent(
                 }
             }
         }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 180.dp)
+                .navigationBarsPadding()
+        )
     }
 }
 
