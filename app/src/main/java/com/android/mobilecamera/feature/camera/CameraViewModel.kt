@@ -37,9 +37,6 @@ data class CameraUiState(
     val isVideoMode: Boolean = false,
     val isRecording: Boolean = false,
     val recordingDuration: Long = 0L,
-    val flashMode: Int = ImageCapture.FLASH_MODE_OFF,
-    val showFlashAnimation: Boolean = false,
-    val isTorchOn: Boolean = false,
     val isCameraAvailable: Boolean = true,
     val aspectRatio: Int = AspectRatio.RATIO_4_3,
     val lensFacing: Int = CameraSelector.LENS_FACING_BACK,
@@ -53,17 +50,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private val repository = MediaRepository(AppDatabase.getDatabase(context).mediaDao(), mediaManager)
     private val permissionManager = PermissionManager(context)
     private val cameraManager = CameraManager(context, mediaManager)
-
+    val flashMode = cameraManager.flashMode
+    val torchState = cameraManager.torchState
     private val _uiState = MutableStateFlow(CameraUiState())
     val uiState = _uiState.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            cameraManager.torchState.collect { isTorchOn ->
-                _uiState.update { it.copy(isTorchOn = isTorchOn) }
-            }
-        }
-    }
 
     fun bindCamera(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
         cameraManager.bindCameraUseCases(
@@ -86,10 +76,6 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun takePhoto() {
         viewModelScope.launch {
-            _uiState.update { it.copy(showFlashAnimation = true) }
-            delay(100)
-            _uiState.update { it.copy(showFlashAnimation = false) }
-
             try {
                 val uri = cameraManager.takePhoto()
                 val thumb = ThumbnailGenerator.generateForPhoto(context, uri.toString())
@@ -161,13 +147,15 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
 
     fun toggleFlash() {
         if (_uiState.value.isVideoMode) {
-            val newState = !_uiState.value.isTorchOn
+            val newState = !cameraManager.torchState.value
             cameraManager.toggleTorch(newState)
         } else {
-            val newMode = if (_uiState.value.flashMode == ImageCapture.FLASH_MODE_OFF)
-                ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+            val currentMode = cameraManager.flashMode.value
+            val newMode = if (currentMode == ImageCapture.FLASH_MODE_OFF)
+                ImageCapture.FLASH_MODE_ON
+            else
+                ImageCapture.FLASH_MODE_OFF
             cameraManager.setFlashMode(newMode)
-            _uiState.update { it.copy(flashMode = newMode) }
         }
     }
 

@@ -34,6 +34,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun CameraScreenContent(
     uiState: CameraUiState,
+    flashMode: Int,
+    isTorchOn: Boolean,
     snackbarHostState: SnackbarHostState,
     onCapture: () -> Unit,
     onSwitchMode: () -> Unit,
@@ -50,6 +52,9 @@ fun CameraScreenContent(
     onTapToFocus: (MeteringPoint) -> Unit,
     onZoomChange: (Float) -> Unit,
 ) {
+
+    var showFlashAnimation by remember { mutableStateOf(false) }
+
     if (showRationaleDialog) {
         AlertDialog(
             onDismissRequest = onRationaleDismiss,
@@ -135,7 +140,7 @@ fun CameraScreenContent(
         }
 
         AnimatedVisibility(
-            visible = uiState.showFlashAnimation,
+            visible = showFlashAnimation,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
@@ -164,8 +169,8 @@ fun CameraScreenContent(
             modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 16.dp, start = 16.dp)
         ) {
             val flashIcon = when {
-                uiState.isVideoMode -> if (uiState.isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff
-                else -> if (uiState.flashMode == ImageCapture.FLASH_MODE_OFF) Icons.Default.FlashOff else Icons.Default.FlashOn
+                uiState.isVideoMode -> if (isTorchOn) Icons.Default.FlashOn else Icons.Default.FlashOff
+                else -> if (flashMode == ImageCapture.FLASH_MODE_OFF) Icons.Default.FlashOff else Icons.Default.FlashOn
             }
             Icon(flashIcon, contentDescription = stringResource(R.string.cd_flash), tint = Color.White)
         }
@@ -180,8 +185,10 @@ fun CameraScreenContent(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                AspectRatioButton(stringResource(R.string.aspect_4_3), uiState.aspectRatio == AspectRatio.RATIO_4_3) { onAspectRatioChange(AspectRatio.RATIO_4_3) }
-                AspectRatioButton(stringResource(R.string.aspect_16_9), uiState.aspectRatio == AspectRatio.RATIO_16_9) { onAspectRatioChange(AspectRatio.RATIO_16_9) }
+                AspectRatioButton(stringResource(R.string.aspect_4_3),
+                    uiState.aspectRatio == AspectRatio.RATIO_4_3) { onAspectRatioChange(AspectRatio.RATIO_4_3) }
+                AspectRatioButton(stringResource(R.string.aspect_16_9),
+                    uiState.aspectRatio == AspectRatio.RATIO_16_9) { onAspectRatioChange(AspectRatio.RATIO_16_9) }
             }
         }
 
@@ -206,7 +213,12 @@ fun CameraScreenContent(
                 } else {
                     Spacer(modifier = Modifier.size(48.dp))
                 }
-                CaptureButton(isRecording = uiState.isRecording, isVideoMode = uiState.isVideoMode, onClick = onCapture)
+                CaptureButton(isRecording = uiState.isRecording, isVideoMode = uiState.isVideoMode, onClick = {
+                    if (!uiState.isVideoMode) {
+                        showFlashAnimation = true
+                    }
+                    onCapture()
+                })
                 IconButton(onClick = onSwitchCamera, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.Cameraswitch, contentDescription = stringResource(R.string.cd_switch_camera), tint = Color.White, modifier = Modifier.fillMaxSize())
                 }
@@ -229,6 +241,13 @@ fun CameraScreenContent(
                 .padding(bottom = 180.dp)
                 .navigationBarsPadding()
         )
+
+        LaunchedEffect(showFlashAnimation) {
+            if (showFlashAnimation) {
+                delay(150)
+                showFlashAnimation = false
+            }
+        }
     }
 }
 

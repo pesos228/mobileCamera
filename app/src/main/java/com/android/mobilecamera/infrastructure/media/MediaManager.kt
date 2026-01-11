@@ -39,7 +39,6 @@ class MediaManager(context: Context) {
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileCamera")
             }
             else {
-                // Для Android 9 и ниже нужно явно создать папку и указать путь в DATA
                 val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
                 val appDir = File(picturesDir, "MobileCamera")
                 if (!appDir.exists()) {
@@ -65,7 +64,6 @@ class MediaManager(context: Context) {
                 put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/MobileCamera")
             }
             else {
-                // Для Android 9 и ниже
                 val moviesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
                 val appDir = File(moviesDir, "MobileCamera")
                 if (!appDir.exists()) {
@@ -102,14 +100,10 @@ class MediaManager(context: Context) {
 
         for (uri in existingUris) {
             try {
-                // На API 26-28 это удалит файл, если есть разрешение WRITE_EXTERNAL_STORAGE
-                // На API 29+ это удалит файл, если он принадлежит приложению
                 val rows = contentResolver.delete(uri, null, null)
                 if (rows > 0) {
                     deletedDirectlyCount++
                 } else {
-                    // Файл есть, но удалить не вышло.
-                    // На старых API это может значить ошибку доступа, добавим в список ошибок
                     if (isFileExists(uri)) {
                         filesRequiringPermission.add(uri)
                     } else {
@@ -117,23 +111,19 @@ class MediaManager(context: Context) {
                     }
                 }
             } catch (_: SecurityException) {
-                // На API 29+ (Android 10+) это означает "нужны права"
                 filesRequiringPermission.add(uri)
             } catch (e: Exception) {
                 Log.e(TAG, "Error pre-deleting $uri", e)
             }
         }
-
         if (filesRequiringPermission.isEmpty()) {
             return@withContext DeleteResult.Success(deletedCount = uriList.size)
         }
 
-        // 3. Если остались файлы — запрашиваем права
         return@withContext requestBatchDeletePermission(filesRequiringPermission)
     }
 
     private fun requestBatchDeletePermission(uris: List<Uri>): DeleteResult {
-        // API 30+ (Android 11+): Красивый групповой диалог
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             return try {
                 val pi = MediaStore.createDeleteRequest(contentResolver, uris)
@@ -143,10 +133,6 @@ class MediaManager(context: Context) {
                 DeleteResult.Error
             }
         }
-
-        // API 29 (Android 10): RecoverableSecurityException
-        // API 26-28 (Android 8-9): Здесь нет системного диалога на удаление чужих файлов через IntentSender.
-        // Обычно там просто нужен пермишен WRITE_EXTERNAL_STORAGE в манифесте.
         else {
             val uri = uris.first()
             return try {
@@ -154,15 +140,12 @@ class MediaManager(context: Context) {
                 Log.e(TAG, "Unexpected state: file deleted without permission request on retry")
                 DeleteResult.Error
             } catch (securityException: SecurityException) {
-
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     val recoverable = securityException as? RecoverableSecurityException
                     if (recoverable != null) {
                         return DeleteResult.RequiresPermission(recoverable.userAction.actionIntent.intentSender)
                     }
                 }
-
-                // Для Android 8-9 (или если на 10-ке ошибка не Recoverable)
                 Log.e(TAG, "Permission denied permanently or legacy storage issue", securityException)
                 DeleteResult.Error
             } catch (e: Exception) {

@@ -21,7 +21,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "camera_app_database" // Имя файла БД
+                    "camera_app_database"
                 )
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()

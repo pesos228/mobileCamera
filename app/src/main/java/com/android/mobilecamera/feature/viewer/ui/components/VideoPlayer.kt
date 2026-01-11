@@ -47,7 +47,6 @@ fun VideoPlayer(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // State
     var isPlayerVisible by remember { mutableStateOf(true) }
     var videoAlpha by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
@@ -77,17 +76,14 @@ fun VideoPlayer(
         }
     }
 
-    // Плавное появление видео с задержкой
     LaunchedEffect(exoPlayer) {
         while (exoPlayer.playbackState != Player.STATE_READY) {
             delay(50)
         }
-        // Даём время фону затемниться
         videoAlpha = 1f
         onReady()
     }
 
-    // Обновление позиции
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPositionDiscontinuity(
@@ -105,7 +101,6 @@ fun VideoPlayer(
         }
     }
 
-    // Периодическое обновление позиции
     LaunchedEffect(exoPlayer) {
         while (true) {
             currentPosition = exoPlayer.currentPosition
@@ -113,7 +108,6 @@ fun VideoPlayer(
         }
     }
 
-    // Автоскрытие контролов
     LaunchedEffect(areControlsVisible, isPlaying, isSeeking) {
         if (areControlsVisible && isPlaying && !isSeeking) {
             delay(3000)
@@ -121,7 +115,6 @@ fun VideoPlayer(
         }
     }
 
-    // Lifecycle management
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -140,7 +133,6 @@ fun VideoPlayer(
         }
     }
 
-    // UI
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -172,7 +164,6 @@ fun VideoPlayer(
             )
         }
 
-        // Центральная кнопка Play/Pause
         AnimatedVisibility(
             visible = (areControlsVisible || !isPlaying) && videoAlpha > 0f,
             enter = fadeIn(),
@@ -197,7 +188,6 @@ fun VideoPlayer(
             }
         }
 
-        // Нижние контролы
         AnimatedVisibility(
             visible = areControlsVisible && videoAlpha > 0f,
             enter = fadeIn(),

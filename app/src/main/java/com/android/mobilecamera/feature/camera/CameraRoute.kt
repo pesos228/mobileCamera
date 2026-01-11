@@ -45,6 +45,9 @@ fun CameraRoute(
 
     val permissionNeededText = stringResource(R.string.msg_permissions_required)
 
+    val flashMode by viewModel.flashMode.collectAsState()
+    val isTorchOn by viewModel.torchState.collectAsState()
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -90,6 +93,8 @@ fun CameraRoute(
 
     CameraScreenContent(
         uiState = uiState,
+        flashMode = flashMode,
+        isTorchOn = isTorchOn,
         snackbarHostState = snackbarHostState,
         hasPermission = hasPermission,
         onPermissionRequest = { checkAndRequestPermissions() },

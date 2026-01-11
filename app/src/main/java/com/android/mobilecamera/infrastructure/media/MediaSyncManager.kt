@@ -47,12 +47,7 @@ class MediaSyncManager(
                         try {
                             val thumbnailPath = generateThumbnail(mediaInfo)
 
-                            onSave(
-                                mediaInfo.uri.toString(),
-                                mediaInfo.type,
-                                mediaInfo.duration,
-                                mediaInfo.timestamp,
-                                thumbnailPath
+                            onSave(mediaInfo.uri.toString(), mediaInfo.type, mediaInfo.duration, mediaInfo.timestamp, thumbnailPath
                             )
                         } catch (e: Exception) {
                             Log.e(TAG, "Error processing ${mediaInfo.displayName}", e)
