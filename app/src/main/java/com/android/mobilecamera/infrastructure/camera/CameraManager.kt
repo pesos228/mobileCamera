@@ -38,16 +38,15 @@ class CameraManager(
 
     private var activeRecording: Recording? = null
 
-    @Volatile
     private var isStoppingRecording = false
-    private val recordingLock = Any()
 
     private var lensFacing: Int = CameraSelector.LENS_FACING_BACK
     private var aspectRatio: Int = AspectRatio.RATIO_4_3
-    private var flashMode: Int = ImageCapture.FLASH_MODE_OFF
 
     private val _torchState = MutableStateFlow(false)
     val torchState: StateFlow<Boolean> = _torchState.asStateFlow()
+    private val _flashMode = MutableStateFlow(ImageCapture.FLASH_MODE_OFF)
+    val flashMode: StateFlow<Int> = _flashMode.asStateFlow()
 
     private val _zoomState = MutableStateFlow(1f)
 
@@ -136,7 +135,7 @@ class CameraManager(
                 imageCapture = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
                     .setResolutionSelector(resolutionSelector)
-                    .setFlashMode(flashMode)
+                    .setFlashMode(flashMode.value)
                     .build()
                 useCases.add(imageCapture!!)
             }
@@ -246,77 +245,60 @@ class CameraManager(
         onVideoSaved: (Uri, Long) -> Unit,
         onError: () -> Unit
     ): Recording? {
-        synchronized(recordingLock) {
-            if (isStoppingRecording) {
-                onError()
-                return null
-            }
+        if (isStoppingRecording) {
+            onError()
+            return null
+        }
 
-            val capture = videoCapture ?: return null
-            val outputOptions = mediaManager.createVideoOutputOptions()
+        val capture = videoCapture ?: return null
+        val outputOptions = mediaManager.createVideoOutputOptions()
 
-            isStoppingRecording = false
+        activeRecording = capture.output
+            .prepareRecording(context, outputOptions)
+            .apply { if (withAudio) withAudioEnabled() }
+            .asPersistentRecording()
+            .start(mainExecutor) { event ->
+                when (event) {
+                    is VideoRecordEvent.Finalize -> {
+                        isStoppingRecording = false
+                        activeRecording = null
 
-            activeRecording = capture.output
-                .prepareRecording(context, outputOptions)
-                .apply { if (withAudio) withAudioEnabled() }
-                .asPersistentRecording()
-                .start(mainExecutor) { event ->
-                    when (event) {
-                        is VideoRecordEvent.Finalize -> {
-                            handleRecordingFinalize(event, onVideoSaved) {
+                        val uri = event.outputResults.outputUri
+                        val duration = event.recordingStats.recordedDurationNanos / 1_000_000
+
+                        if (!event.hasError()) {
+                            onVideoSaved(uri, duration)
+                        } else {
+                            if (uri != Uri.EMPTY && duration > 0) {
+                                Log.w(TAG, "Video finalized with error but saved (likely during stop). Code: ${event.error}")
+                                onVideoSaved(uri, duration)
+                            } else {
+                                Log.e(TAG, "Video capture failed completely. Error code: ${event.error}")
                                 onError()
                             }
                         }
                     }
                 }
-            return activeRecording
-        }
-    }
-
-    private fun handleRecordingFinalize(
-        event: VideoRecordEvent.Finalize,
-        onVideoSaved: (Uri, Long) -> Unit,
-        onError: () -> Unit
-    ) {
-        synchronized(recordingLock) {
-            isStoppingRecording = false
-
-            val uri = event.outputResults.outputUri
-            val duration = event.recordingStats.recordedDurationNanos / 1_000_000
-
-            if (!event.hasError()) {
-                onVideoSaved(uri, duration)
-            } else {
-                if (uri != Uri.EMPTY && duration > 0) {
-                    Log.w(TAG, "Video finalized with error but saved (likely during stop). Code: ${event.error}")
-                    onVideoSaved(uri, duration)
-                } else {
-                    Log.e(TAG, "Video capture failed completely. Error code: ${event.error}")
-                    onError()
-                }
             }
-        }
+        return activeRecording
     }
 
     fun stopVideoRecording(): Boolean {
-        synchronized(recordingLock) {
-            val recording = activeRecording
-            if (recording == null) return false
+        val recording = activeRecording
+        if (recording == null) return false
 
-            if (isStoppingRecording) return false
+        if (isStoppingRecording) return false
 
-            isStoppingRecording = true
-            activeRecording = null
+        isStoppingRecording = true
+        activeRecording = null
 
-            try {
-                recording.stop()
-                return true
-            } catch (e: Exception) {
-                Log.e(TAG, "Error stopping recording", e)
-                isStoppingRecording = false
-                return false
-            }
+        try {
+            recording.stop()
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping recording", e)
+            isStoppingRecording = false
+            return false
         }
     }
 
@@ -326,18 +308,16 @@ class CameraManager(
     }
 
     fun setFlashMode(mode: Int) {
-        flashMode = mode
         imageCapture?.flashMode = mode
+        _flashMode.value = mode
     }
 
     fun cleanup() {
-        synchronized(recordingLock) {
-            if (activeRecording != null && !isStoppingRecording) {
-                stopVideoRecording()
-            }
-            activeRecording = null
-            isStoppingRecording = false
+        if (activeRecording != null && !isStoppingRecording) {
+            stopVideoRecording()
         }
+        activeRecording = null
+        isStoppingRecording = false
 
         cameraProvider?.unbindAll()
         cameraProvider = null
@@ -347,5 +327,6 @@ class CameraManager(
         videoCapture = null
         recorder = null
         _torchState.value = false
+        _flashMode.value = ImageCapture.FLASH_MODE_OFF
     }
 }
