@@ -53,7 +53,6 @@ fun MediaItemWithSelection(
             .aspectRatio(1f)
             .background(Color.DarkGray)
     ) {
-        // === 1. МОКИ ===
         if (item.path.startsWith("mock_")) {
             val color = remember(item.id) {
                 val rnd = Random(item.id)
@@ -61,7 +60,6 @@ fun MediaItemWithSelection(
             }
             Box(modifier = Modifier.fillMaxSize().background(color))
         } else {
-            // === 2. ЗАГРУЗКА ===
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(
