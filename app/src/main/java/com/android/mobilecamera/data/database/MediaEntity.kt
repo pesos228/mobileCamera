@@ -1,5 +1,6 @@
 package com.android.mobilecamera.data.database
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -12,5 +13,6 @@ data class MediaEntity(
     val type: MediaType,
     val timestamp: Long,
     val duration: Long? = null,
+    @ColumnInfo(name = "thumbnail_path")
     val thumbnailPath: String? = null
 )

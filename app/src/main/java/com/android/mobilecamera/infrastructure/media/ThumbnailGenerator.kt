@@ -46,7 +46,7 @@ object ThumbnailGenerator {
                     return@withContext null
                 }
 
-                val rotatedBitmap = fixOrientation(context, uri, bitmap!!)
+                val rotatedBitmap = fixOrientation(context, uri, bitmap)
 
                 val result = saveBitmapToCache(context, rotatedBitmap, "img_thumb")
 
